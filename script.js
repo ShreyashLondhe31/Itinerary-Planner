@@ -754,23 +754,16 @@ class TravelPlanner {
   }
 
   showSuggestions(results, type) {
-    const isStop = type.startsWith("stop-");
+    const isStop = type && type.startsWith("stop-");
     const boxId = isStop
       ? type + "-suggestions"
       : type === "source"
       ? "sourceSuggestions"
       : "destinationSuggestions";
 
-    // Create suggestion box dynamically if for stop
-    if (isStop && !document.getElementById(boxId)) {
-      const input = document.getElementById(type);
-      const box = document.createElement("div");
-      box.id = boxId;
-      box.className = "suggestions-box";
-      input.parentNode.appendChild(box);
-    }
-
     const box = document.getElementById(boxId);
+    if (!box) return;
+
     box.innerHTML = "";
     box.style.display = results.length ? "block" : "none";
 
@@ -843,37 +836,55 @@ class TravelPlanner {
     return JSON.parse(localStorage.getItem("favorites")) || [];
   }
 
+  renumberStops() {
+    const stopGroups = document.querySelectorAll("#stopsContainer .stop-group");
+    stopGroups.forEach((div, index) => {
+      const label = div.querySelector("label");
+      const input = div.querySelector(".stop-input");
+      const suggestions = div.querySelector(".suggestions-box");
+
+      label.textContent = `Stop ${index + 1}:`;
+      input.id = `stop-${index}`;
+      suggestions.id = `stop-${index}-suggestions`;
+    });
+  }
+
   addStopField() {
     const container = document.getElementById("stopsContainer");
-    const stopIndex = this.stops.length;
 
     const div = document.createElement("div");
     div.className = "input-group stop-group";
-    div.id = `stop-group-${stopIndex}`;
     div.innerHTML = `
-    <label>Stop ${stopIndex + 1}:</label>
+    <label>Stop:</label>
     <div style="display: flex; gap: 8px;">
-      <input type="text" id="stop-${stopIndex}" placeholder="Enter stop location" style="flex: 1;">
-      <button class="btn remove-stop" data-index="${stopIndex}">❌</button>
+      <input type="text" class="stop-input" placeholder="Enter stop location" style="flex: 1;">
+      <button class="btn remove-stop">❌</button>
     </div>
-    <div id="stop-${stopIndex}-suggestions" class="suggestions-box"></div>
+    <div class="suggestions-box"></div>
   `;
     container.appendChild(div);
 
-    // Track stop
+    // Track placeholder for this stop
     this.stops.push(null);
 
-    // Autocomplete for this stop
-    document
-      .getElementById(`stop-${stopIndex}`)
-      .addEventListener("input", (e) => {
-        this.autocomplete(e.target.value, `stop-${stopIndex}`);
-      });
+    // Bind input autocomplete
+    const input = div.querySelector(".stop-input");
+    input.addEventListener("input", (e) => {
+      this.autocomplete(e.target.value, input.id);
+    });
 
     // Bind remove button
-    div
-      .querySelector(".remove-stop")
-      .addEventListener("click", () => this.removeStop(stopIndex));
+    div.querySelector(".remove-stop").addEventListener("click", () => {
+      div.remove();
+      this.stops.splice(
+        [...container.querySelectorAll(".stop-group")].indexOf(div),
+        1
+      );
+      this.renumberStops();
+      this.checkAndPlanRoute();
+    });
+
+    this.renumberStops();
   }
 
   removeStop(index) {
