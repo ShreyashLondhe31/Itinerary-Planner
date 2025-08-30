@@ -1,18 +1,19 @@
 class TravelPlanner {
-  constructor() {
-    this.map = null;
-    this.sourceMarker = null;
-    this.destinationMarker = null;
-    this.routeLayer = null;
-    this.sourceLocation = null;
-    this.destinationLocation = null;
-    this.stops = []; // NEW
-    this.recommendations = [];
-    this.locationDatabase = this.createLocationDatabase();
+constructor() {
+  this.map = null;
+  this.sourceMarker = null;
+  this.destinationMarker = null;
+  this.routeLayer = null;
+  this.sourceLocation = null;
+  this.destinationLocation = null;
+  this.stops = [];
+  this.recommendations = [];
+  this.recommendationMarkers = []; // NEW: Track recommendation markers
+  this.locationDatabase = this.createLocationDatabase();
 
-    this.initializeMap();
-    this.bindEvents();
-  }
+  this.initializeMap();
+  this.bindEvents();
+}
 
   // --- Nominatim helpers ---
   async geocode(query) {
@@ -467,78 +468,95 @@ class TravelPlanner {
     }
   }
 
-  planRoute() {
-    // Collect all active points (source, stops, destination)
-    let points = [];
-    if (this.sourceLocation) points.push(this.sourceLocation);
-    this.stops.forEach((s) => {
-      if (s) points.push(s);
-    });
-    if (this.destinationLocation) points.push(this.destinationLocation);
-
-    if (points.length < 2) return; // Need at least 2 to calculate
-
-    // Remove old route
-    if (this.routeLayer) {
-      this.map.removeLayer(this.routeLayer);
+planRoute() {
+  // Collect all active points (source, stops, destination)
+  let waypoints = [];
+  if (this.sourceLocation) {
+    waypoints.push(L.latLng(this.sourceLocation.lat, this.sourceLocation.lng));
+  }
+  
+  this.stops.forEach((stop) => {
+    if (stop) {
+      waypoints.push(L.latLng(stop.lat, stop.lng));
     }
+  });
+  
+  if (this.destinationLocation) {
+    waypoints.push(L.latLng(this.destinationLocation.lat, this.destinationLocation.lng));
+  }
 
-    // Draw route
-    const latlngs = points.map((p) => [p.lat, p.lng]);
-    this.routeLayer = L.polyline(latlngs, {
-      color: "#ff6b6b",
-      weight: 5,
-      opacity: 0.8,
-    }).addTo(this.map);
-    this.map.fitBounds(this.routeLayer.getBounds(), { padding: [20, 20] });
+  if (waypoints.length < 2) return; // Need at least 2 points
 
-    // --- Calculate total distance ---
-    let totalDistance = 0;
-    for (let i = 0; i < points.length - 1; i++) {
-      totalDistance += this.calculateDistance(
-        points[i].lat,
-        points[i].lng,
-        points[i + 1].lat,
-        points[i + 1].lng
-      );
-    }
+  // Remove old route
+  if (this.routeLayer) {
+    this.map.removeControl(this.routeLayer);
+  }
 
-    // --- Route Options ---
-    const option = document.getElementById("routeOption").value;
-    let speed = 60,
-      costPerKm = 10;
+  // Get route preference
+  const option = document.getElementById("routeOption").value;
+  let routingProfile = 'driving'; // default
 
-    if (option === "cheapest") {
-      speed = 50;
-      costPerKm = 6;
-    } else if (option === "scenic") {
-      speed = 40;
-      costPerKm = 8;
-    }
+  // Create routing control with waypoints
+  this.routeLayer = L.Routing.control({
+    waypoints: waypoints,
+    routeWhileDragging: false,
+    addWaypoints: false,
+    createMarker: function() { return null; }, // Don't create default markers
+    lineOptions: {
+      styles: [
+        {
+          color: '#ff6b6b',
+          weight: 6,
+          opacity: 0.8
+        }
+      ]
+    },
+    router: L.Routing.osrmv1({
+      serviceUrl: 'https://router.project-osrm.org/route/v1',
+      profile: routingProfile
+    }),
+    formatter: new L.Routing.Formatter({
+      language: 'en'
+    }),
+    show: false, // Hide the instruction panel
+    createMarker: function() { return null; } // Don't override our custom markers
+  }).addTo(this.map);
 
-    // --- Time & Cost ---
-    const timeHours = totalDistance / speed;
-    const minutes = Math.round(timeHours * 60);
-    const cost = Math.round(totalDistance * costPerKm);
-
-    // --- Update UI ---
-    document.getElementById("distance").textContent = `${totalDistance.toFixed(
-      0
-    )} km`;
-
-    if (minutes < 60) {
-      document.getElementById("duration").textContent = `${minutes} min`;
+  // Listen for route found event to update UI
+  this.routeLayer.on('routesfound', (e) => {
+    const routes = e.routes;
+    const summary = routes[0].summary;
+    
+    // Update distance and time from actual route
+    const distanceKm = (summary.totalDistance / 1000).toFixed(0);
+    const timeMinutes = Math.round(summary.totalTime / 60);
+    
+    document.getElementById("distance").textContent = `${distanceKm} km`;
+    
+    if (timeMinutes < 60) {
+      document.getElementById("duration").textContent = `${timeMinutes} min`;
     } else {
-      const hours = Math.floor(minutes / 60);
-      const mins = minutes % 60;
-      document.getElementById("duration").textContent =
+      const hours = Math.floor(timeMinutes / 60);
+      const mins = timeMinutes % 60;
+      document.getElementById("duration").textContent = 
         mins === 0 ? `${hours} h` : `${hours}h ${mins}m`;
     }
 
-    document.getElementById("routeType").textContent =
-      option.charAt(0).toUpperCase() + option.slice(1);
+    // Calculate cost based on actual distance
+    let costPerKm = 10;
+    if (option === "cheapest") {
+      costPerKm = 6;
+    } else if (option === "scenic") {
+      costPerKm = 8;
+    }
+    
+    const cost = Math.round(distanceKm * costPerKm);
 
-    // Add Estimated Cost field if missing
+    // Update route type
+    document.getElementById("routeType").textContent = 
+      option.charAt(0).toUpperCase() + option.slice(1) + " Route";
+
+    // Add/update cost field
     if (!document.getElementById("tripCost")) {
       const p = document.createElement("p");
       p.innerHTML = `<strong>Estimated Cost:</strong> <span id="tripCost">-</span>`;
@@ -546,9 +564,16 @@ class TravelPlanner {
     }
     document.getElementById("tripCost").textContent = `₹${cost}`;
 
-    // Make sure info box is visible
+    // Show route info
     document.getElementById("routeInfo").style.display = "block";
-  }
+  });
+
+  // Handle routing errors
+  this.routeLayer.on('routingerror', (e) => {
+    console.error('Routing error:', e);
+    alert('Could not find a route between the selected points. Please try different locations.');
+  });
+}
 
   async getRecommendations() {
     document.getElementById("recommendationsContent").innerHTML =
@@ -569,126 +594,225 @@ class TravelPlanner {
     this.displayRecommendations();
   }
 
-  async getLocationRecommendations(location) {
-    if (!location) return [];
+async getLocationRecommendations(location) {
+  if (!location) return [];
 
-    const lat = location.lat;
-    const lon = location.lng;
+  const lat = location.lat;
+  const lon = location.lng;
 
-    // Fetch mainly tourist places, museums, historic sites, parks
-    const query = `
-                    [out:json][timeout:25];
-                    (
-                    node["tourism"~"attraction|museum|gallery|zoo|theme_park"](around:5000,${lat},${lon});
-                    node["historic"](around:5000,${lat},${lon});
-                    node["leisure"="park"](around:5000,${lat},${lon});
-                    );
-                    out center 15;
-                `;
+  // Fetch mainly tourist places, museums, historic sites, parks
+  const query = `
+                  [out:json][timeout:25];
+                  (
+                  node["tourism"~"attraction|museum|gallery|zoo|theme_park"](around:5000,${lat},${lon});
+                  node["historic"](around:5000,${lat},${lon});
+                  node["leisure"="park"](around:5000,${lat},${lon});
+                  );
+                  out center 15;
+              `;
 
-    try {
-      const res = await fetch("https://overpass-api.de/api/interpreter", {
-        method: "POST",
-        body: query,
-        headers: { "Content-Type": "text/plain" },
-      });
-      const data = await res.json();
-
-      if (!data.elements) return [];
-
-      return data.elements.map((el) => {
-        const localName = el.tags.name || "";
-        const engName = el.tags["name:en"] || "";
-        let displayName;
-        if (engName && engName !== localName) {
-          displayName = `${localName} (${engName})`;
-        } else if (localName) {
-          displayName = `${localName} (No English label)`;
-        } else {
-          displayName = "Unnamed Place";
-        }
-        return {
-          name: displayName || "Unnamed Place",
-          type:
-            el.tags.tourism || el.tags.historic || el.tags.leisure || "place",
-          description:
-            el.tags["description"] ||
-            (el.tags.historic
-              ? `Historic site`
-              : el.tags.tourism
-              ? `Tourist attraction`
-              : el.tags.leisure
-              ? `Leisure spot`
-              : "Nearby place"),
-        };
-      });
-    } catch (err) {
-      console.error("Overpass fetch failed:", err);
-      return [];
-    }
-  }
-
-  displayRecommendations() {
-    const container = document.getElementById("recommendationsContent");
-
-    if (this.recommendations.length === 0) {
-      container.innerHTML = "<p>No recommendations found for this route.</p>";
-      return;
-    }
-
-    const groupedByArea = this.recommendations.reduce((groups, rec) => {
-      if (!groups[rec.area]) groups[rec.area] = [];
-      groups[rec.area].push(rec);
-      return groups;
-    }, {});
-
-    let html = "";
-    Object.keys(groupedByArea).forEach((area) => {
-      html += `<h3 style="margin: 20px 0 15px 0; color: #333;">${area}</h3>`;
-      groupedByArea[area].forEach((rec) => {
-        html += `
-                            <div class="recommendation-item">
-                                <h4>${rec.name}</h4>
-                                <p>${rec.description}</p>
-                                <span class="category-tag">${rec.type}</span>
-                            </div>
-                        `;
-      });
+  try {
+    const res = await fetch("https://overpass-api.de/api/interpreter", {
+      method: "POST",
+      body: query,
+      headers: { "Content-Type": "text/plain" },
     });
+    const data = await res.json();
 
-    container.innerHTML = html;
+    if (!data.elements) return [];
+
+    return data.elements.map((el) => {
+      const localName = el.tags.name || "";
+      const engName = el.tags["name:en"] || "";
+      let displayName;
+      if (engName && engName !== localName) {
+        displayName = `${localName} (${engName})`;
+      } else if (localName) {
+        displayName = `${localName}`;
+      } else {
+        displayName = "Unnamed Place";
+      }
+      
+      return {
+        name: displayName || "Unnamed Place",
+        type: el.tags.tourism || el.tags.historic || el.tags.leisure || "place",
+        description:
+          el.tags["description"] ||
+          (el.tags.historic
+            ? `Historic site`
+            : el.tags.tourism
+            ? `Tourist attraction`
+            : el.tags.leisure
+            ? `Leisure spot`
+            : "Nearby place"),
+        lat: el.lat, // NEW: Include coordinates
+        lng: el.lon, // NEW: Include coordinates
+      };
+    });
+  } catch (err) {
+    console.error("Overpass fetch failed:", err);
+    return [];
+  }
+}
+
+displayRecommendations() {
+  const container = document.getElementById("recommendationsContent");
+
+  // Clear existing recommendation markers
+  this.clearRecommendationMarkers();
+
+  if (this.recommendations.length === 0) {
+    container.innerHTML = "<p>No recommendations found for this route.</p>";
+    return;
   }
 
-  clearRoute() {
-    // Clear markers
-    if (this.sourceMarker) {
-      this.map.removeLayer(this.sourceMarker);
-      this.sourceMarker = null;
-    }
-    if (this.destinationMarker) {
-      this.map.removeLayer(this.destinationMarker);
-      this.destinationMarker = null;
-    }
-    if (this.routeLayer) {
-      this.map.removeLayer(this.routeLayer);
-      this.routeLayer = null;
-    }
+  const groupedByArea = this.recommendations.reduce((groups, rec) => {
+    if (!groups[rec.area]) groups[rec.area] = [];
+    groups[rec.area].push(rec);
+    return groups;
+  }, {});
 
-    // Clear inputs and data
-    document.getElementById("source").value = "";
-    document.getElementById("destination").value = "";
-    document.getElementById("routeInfo").style.display = "none";
-    document.getElementById("recommendationsContent").innerHTML =
-      '<p class="loading">Select source and destination to get recommendations...</p>';
-    document.getElementById("exportButtons").style.display = "none";
+  let html = "";
+  Object.keys(groupedByArea).forEach((area) => {
+    html += `<h3 style="margin: 20px 0 15px 0; color: #333;">${area}</h3>`;
+    groupedByArea[area].forEach((rec, index) => {
+      const recId = `rec-${area.replace(/\s+/g, '')}-${index}`;
+      html += `
+        <div class="recommendation-item" data-rec-id="${recId}">
+          <h4>${rec.name}</h4>
+          <p>${rec.description}</p>
+          <span class="category-tag">${rec.type}</span>
+          <button class="btn-small show-on-map" data-lat="${rec.lat}" data-lng="${rec.lng}" data-name="${rec.name}">
+            📍 Show on Map
+          </button>
+        </div>
+      `;
+    });
+  });
 
-    this.sourceLocation = null;
-    this.destinationLocation = null;
-    this.recommendations = [];
+  container.innerHTML = html;
 
-    // Reset map view
-    this.map.setView([20.5937, 78.9629], 5);
+  // Add map markers for all recommendations
+  this.addRecommendationMarkers();
+
+  // Bind show on map buttons
+  container.querySelectorAll('.show-on-map').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const lat = parseFloat(e.target.dataset.lat);
+      const lng = parseFloat(e.target.dataset.lng);
+      const name = e.target.dataset.name;
+      
+      // Center map on this location
+      this.map.setView([lat, lng], 15);
+      
+      // Open popup for this marker
+      const marker = this.recommendationMarkers.find(m => 
+        m.getLatLng().lat === lat && m.getLatLng().lng === lng
+      );
+      if (marker) {
+        marker.openPopup();
+      }
+    });
+  });
+}
+
+// NEW: Method to add recommendation markers to map
+addRecommendationMarkers() {
+  this.recommendations.forEach((rec) => {
+    if (rec.lat && rec.lng) {
+      // Create custom icon for recommendations
+      const icon = L.divIcon({
+        className: 'recommendation-marker',
+        html: this.getRecommendationIcon(rec.type),
+        iconSize: [25, 25],
+        iconAnchor: [12, 12],
+        popupAnchor: [0, -15]
+      });
+
+      const marker = L.marker([rec.lat, rec.lng], { icon })
+        .addTo(this.map)
+        .bindPopup(`
+          <div class="recommendation-popup">
+            <h4>${rec.name}</h4>
+            <p><strong>Type:</strong> ${rec.type}</p>
+            <p>${rec.description}</p>
+            <p><strong>Area:</strong> ${rec.area}</p>
+          </div>
+        `);
+
+      this.recommendationMarkers.push(marker);
+    }
+  });
+}
+
+// NEW: Method to clear recommendation markers
+clearRecommendationMarkers() {
+  this.recommendationMarkers.forEach(marker => {
+    this.map.removeLayer(marker);
+  });
+  this.recommendationMarkers = [];
+}
+
+// NEW: Get appropriate icon for recommendation type
+getRecommendationIcon(type) {
+  const iconMap = {
+    'attraction': '🎯',
+    'museum': '🏛️',
+    'gallery': '🖼️',
+    'zoo': '🦁',
+    'theme_park': '🎢',
+    'historic': '🏛️',
+    'park': '🌳',
+    'place': '📍',
+    'fort': '🏰',
+    'palace': '🏰',
+    'temple': '🛕',
+    'church': '⛪',
+    'monument': '🗿'
+  };
+  
+  return iconMap[type] || '📍';
+}
+
+clearRoute() {
+  // Clear markers
+  if (this.sourceMarker) {
+    this.map.removeLayer(this.sourceMarker);
+    this.sourceMarker = null;
   }
+  if (this.destinationMarker) {
+    this.map.removeLayer(this.destinationMarker);
+    this.destinationMarker = null;
+  }
+  
+  // Clear routing control (not just layer)
+  if (this.routeLayer) {
+    this.map.removeControl(this.routeLayer);
+    this.routeLayer = null;
+  }
+
+  // Clear stops
+  this.stops.forEach((stop, index) => {
+    const stopGroup = document.getElementById(`stop-group-${index}`);
+    if (stopGroup) stopGroup.remove();
+  });
+  this.stops = [];
+
+  // Clear inputs and data
+  document.getElementById("source").value = "";
+  document.getElementById("destination").value = "";
+  document.getElementById("routeInfo").style.display = "none";
+  document.getElementById("recommendationsContent").innerHTML =
+    '<p class="loading">Select source and destination to get recommendations...</p>';
+  document.getElementById("exportButtons").style.display = "none";
+
+  this.sourceLocation = null;
+  this.destinationLocation = null;
+  this.recommendations = [];
+
+  // Reset map view
+  this.map.setView([20.5937, 78.9629], 5);
+}
 
   showExportButtons() {
     document.getElementById("exportButtons").style.display = "block";
@@ -885,17 +1009,20 @@ class TravelPlanner {
     this.renumberStops();
   }
 
-  removeStop(index) {
-    // Remove from DOM
-    const stopDiv = document.getElementById(`stop-group-${index}`);
-    if (stopDiv) stopDiv.remove();
+removeStop(index) {
+  // Remove from DOM
+  const stopDiv = document.getElementById(`stop-group-${index}`);
+  if (stopDiv) stopDiv.remove();
 
-    // Clear stop from array
-    this.stops[index] = null;
+  // Clear stop from array
+  this.stops[index] = null;
 
-    // Recalculate route if still valid
-    this.checkAndPlanRoute();
-  }
+  // Clear recommendation markers when route changes
+  this.clearRecommendationMarkers();
+
+  // Recalculate route if still valid
+  this.checkAndPlanRoute();
+}
 
   exportAsJSON() {
     const itineraryData = {
