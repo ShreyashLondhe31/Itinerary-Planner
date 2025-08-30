@@ -6,6 +6,7 @@ class TravelPlanner {
     this.routeLayer = null;
     this.sourceLocation = null;
     this.destinationLocation = null;
+    this.stops = []; // NEW
     this.recommendations = [];
     this.locationDatabase = this.createLocationDatabase();
 
@@ -467,73 +468,85 @@ class TravelPlanner {
   }
 
   planRoute() {
-    // Calculate straight-line distance and estimated time
-    const distance = this.calculateDistance(
-      this.sourceLocation.lat,
-      this.sourceLocation.lng,
-      this.destinationLocation.lat,
-      this.destinationLocation.lng
-    );
+    // Collect all active points (source, stops, destination)
+    let points = [];
+    if (this.sourceLocation) points.push(this.sourceLocation);
+    this.stops.forEach((s) => {
+      if (s) points.push(s);
+    });
+    if (this.destinationLocation) points.push(this.destinationLocation);
 
-    // More realistic time calculation
-    // Assuming average speed of 60 km/h for road travel
-    // Add 20% extra for actual road routes (not straight line)
-    const roadDistance = distance * 1.2; // Account for actual road routes
-    const averageSpeed = 60; // km/h
-    const estimatedTimeHours = roadDistance / averageSpeed;
-    const estimatedTimeMinutes = Math.round(estimatedTimeHours * 60);
+    if (points.length < 2) return; // Need at least 2 to calculate
 
-    // Remove existing route
+    // Remove old route
     if (this.routeLayer) {
       this.map.removeLayer(this.routeLayer);
     }
 
-    // Draw straight line route (demo purposes)
-    this.routeLayer = L.polyline(
-      [
-        [this.sourceLocation.lat, this.sourceLocation.lng],
-        [this.destinationLocation.lat, this.destinationLocation.lng],
-      ],
-      {
-        color: "#ff6b6b",
-        weight: 5,
-        opacity: 0.8,
-      }
-    ).addTo(this.map);
-
-    // Fit map to show entire route
+    // Draw route
+    const latlngs = points.map((p) => [p.lat, p.lng]);
+    this.routeLayer = L.polyline(latlngs, {
+      color: "#ff6b6b",
+      weight: 5,
+      opacity: 0.8,
+    }).addTo(this.map);
     this.map.fitBounds(this.routeLayer.getBounds(), { padding: [20, 20] });
 
-    // Update route info with better time formatting
-    document.getElementById("distance").textContent = `${distance.toFixed(
+    // --- Calculate total distance ---
+    let totalDistance = 0;
+    for (let i = 0; i < points.length - 1; i++) {
+      totalDistance += this.calculateDistance(
+        points[i].lat,
+        points[i].lng,
+        points[i + 1].lat,
+        points[i + 1].lng
+      );
+    }
+
+    // --- Route Options ---
+    const option = document.getElementById("routeOption").value;
+    let speed = 60,
+      costPerKm = 10;
+
+    if (option === "cheapest") {
+      speed = 50;
+      costPerKm = 6;
+    } else if (option === "scenic") {
+      speed = 40;
+      costPerKm = 8;
+    }
+
+    // --- Time & Cost ---
+    const timeHours = totalDistance / speed;
+    const minutes = Math.round(timeHours * 60);
+    const cost = Math.round(totalDistance * costPerKm);
+
+    // --- Update UI ---
+    document.getElementById("distance").textContent = `${totalDistance.toFixed(
       0
     )} km`;
 
-    // Format time nicely (hours and minutes)
-    if (estimatedTimeMinutes < 60) {
-      document.getElementById(
-        "duration"
-      ).textContent = `${estimatedTimeMinutes} minutes`;
-    } else if (estimatedTimeMinutes < 1440) {
-      // Less than 24 hours
-      const hours = Math.floor(estimatedTimeMinutes / 60);
-      const minutes = estimatedTimeMinutes % 60;
-      if (minutes === 0) {
-        document.getElementById("duration").textContent = `${hours} hours`;
-      } else {
-        document.getElementById(
-          "duration"
-        ).textContent = `${hours}h ${minutes}m`;
-      }
+    if (minutes < 60) {
+      document.getElementById("duration").textContent = `${minutes} min`;
     } else {
-      // More than 24 hours
-      const days = Math.floor(estimatedTimeMinutes / 1440);
-      const hours = Math.floor((estimatedTimeMinutes % 1440) / 60);
-      document.getElementById(
-        "duration"
-      ).textContent = `${days} days ${hours}h`;
+      const hours = Math.floor(minutes / 60);
+      const mins = minutes % 60;
+      document.getElementById("duration").textContent =
+        mins === 0 ? `${hours} h` : `${hours}h ${mins}m`;
     }
 
+    document.getElementById("routeType").textContent =
+      option.charAt(0).toUpperCase() + option.slice(1);
+
+    // Add Estimated Cost field if missing
+    if (!document.getElementById("tripCost")) {
+      const p = document.createElement("p");
+      p.innerHTML = `<strong>Estimated Cost:</strong> <span id="tripCost">-</span>`;
+      document.getElementById("routeInfo").appendChild(p);
+    }
+    document.getElementById("tripCost").textContent = `₹${cost}`;
+
+    // Make sure info box is visible
     document.getElementById("routeInfo").style.display = "block";
   }
 
@@ -741,9 +754,23 @@ class TravelPlanner {
   }
 
   showSuggestions(results, type) {
-    const box = document.getElementById(
-      type === "source" ? "sourceSuggestions" : "destinationSuggestions"
-    );
+    const isStop = type.startsWith("stop-");
+    const boxId = isStop
+      ? type + "-suggestions"
+      : type === "source"
+      ? "sourceSuggestions"
+      : "destinationSuggestions";
+
+    // Create suggestion box dynamically if for stop
+    if (isStop && !document.getElementById(boxId)) {
+      const input = document.getElementById(type);
+      const box = document.createElement("div");
+      box.id = boxId;
+      box.className = "suggestions-box";
+      input.parentNode.appendChild(box);
+    }
+
+    const box = document.getElementById(boxId);
     box.innerHTML = "";
     box.style.display = results.length ? "block" : "none";
 
@@ -756,24 +783,25 @@ class TravelPlanner {
       div.textContent = fullName;
 
       div.onclick = () => {
+        const lat = place.geometry.coordinates[1];
+        const lng = place.geometry.coordinates[0];
+
         if (type === "source") {
-          this.setAsSource(
-            place.geometry.coordinates[1],
-            place.geometry.coordinates[0],
-            fullName
-          );
+          this.setAsSource(lat, lng, fullName);
           document.getElementById("source").value = fullName;
-        } else {
-          this.setAsDestination(
-            place.geometry.coordinates[1],
-            place.geometry.coordinates[0],
-            fullName
-          );
+        } else if (type === "destination") {
+          this.setAsDestination(lat, lng, fullName);
           document.getElementById("destination").value = fullName;
+        } else if (isStop) {
+          const index = parseInt(type.split("-")[1]);
+          this.stops[index] = { lat, lng, name: fullName };
+          document.getElementById(type).value = fullName;
         }
+
         this.saveRecent(fullName);
         box.innerHTML = "";
         box.style.display = "none";
+        this.checkAndPlanRoute();
       };
       box.appendChild(div);
     });
@@ -815,6 +843,51 @@ class TravelPlanner {
     return JSON.parse(localStorage.getItem("favorites")) || [];
   }
 
+  addStopField() {
+    const container = document.getElementById("stopsContainer");
+    const stopIndex = this.stops.length;
+
+    const div = document.createElement("div");
+    div.className = "input-group stop-group";
+    div.id = `stop-group-${stopIndex}`;
+    div.innerHTML = `
+    <label>Stop ${stopIndex + 1}:</label>
+    <div style="display: flex; gap: 8px;">
+      <input type="text" id="stop-${stopIndex}" placeholder="Enter stop location" style="flex: 1;">
+      <button class="btn remove-stop" data-index="${stopIndex}">❌</button>
+    </div>
+    <div id="stop-${stopIndex}-suggestions" class="suggestions-box"></div>
+  `;
+    container.appendChild(div);
+
+    // Track stop
+    this.stops.push(null);
+
+    // Autocomplete for this stop
+    document
+      .getElementById(`stop-${stopIndex}`)
+      .addEventListener("input", (e) => {
+        this.autocomplete(e.target.value, `stop-${stopIndex}`);
+      });
+
+    // Bind remove button
+    div
+      .querySelector(".remove-stop")
+      .addEventListener("click", () => this.removeStop(stopIndex));
+  }
+
+  removeStop(index) {
+    // Remove from DOM
+    const stopDiv = document.getElementById(`stop-group-${index}`);
+    if (stopDiv) stopDiv.remove();
+
+    // Clear stop from array
+    this.stops[index] = null;
+
+    // Recalculate route if still valid
+    this.checkAndPlanRoute();
+  }
+
   exportAsJSON() {
     const itineraryData = {
       tripDetails: {
@@ -851,6 +924,10 @@ class TravelPlanner {
       .addEventListener("input", (e) =>
         this.autocomplete(e.target.value, "destination")
       );
+
+    document
+      .getElementById("addStop")
+      .addEventListener("click", () => this.addStopField());
 
     document
       .getElementById("clearRoute")

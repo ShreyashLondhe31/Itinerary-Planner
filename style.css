@@ -198,6 +198,12 @@ body {
   border-left: 4px solid #ffc107;
 }
 
+.stop-group .remove-stop {
+  background: #dc3545; /* red */
+  padding: 6px 12px;
+  font-size: 14px;
+}
+
 @media (max-width: 768px) {
   .main-content {
     grid-template-columns: 1fr;
