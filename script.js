@@ -754,51 +754,49 @@ class TravelPlanner {
   }
 
   showSuggestions(results, type) {
-    const isStop = type && type.startsWith("stop-");
-    const boxId = isStop
-      ? type + "-suggestions"
-      : type === "source"
-      ? "sourceSuggestions"
-      : "destinationSuggestions";
+  const isStop = type && type.startsWith("stop-");
+  const boxId = isStop ? type + "-suggestions" : 
+    (type === 'source' ? 'sourceSuggestions' : 'destinationSuggestions');
 
-    const box = document.getElementById(boxId);
-    if (!box) return;
+  const box = document.getElementById(boxId);
+  if (!box) return;
 
-    box.innerHTML = "";
-    box.style.display = results.length ? "block" : "none";
+  box.innerHTML = '';
+  box.style.display = results.length ? 'block' : 'none';
 
-    results.forEach((place) => {
-      let name = place.properties.name || "Unnamed";
-      let country = place.properties.country || "";
-      let fullName = `${name}, ${country}`;
+  results.forEach(place => {
+    let name = place.properties.name || "Unnamed";
+    let country = place.properties.country || "";
+    let fullName = `${name}, ${country}`;
 
-      let div = document.createElement("div");
-      div.textContent = fullName;
+    let div = document.createElement("div");
+    div.textContent = fullName;
 
-      div.onclick = () => {
-        const lat = place.geometry.coordinates[1];
-        const lng = place.geometry.coordinates[0];
+    div.onclick = () => {
+      const lat = place.geometry.coordinates[1];
+      const lng = place.geometry.coordinates[0];
 
-        if (type === "source") {
-          this.setAsSource(lat, lng, fullName);
-          document.getElementById("source").value = fullName;
-        } else if (type === "destination") {
-          this.setAsDestination(lat, lng, fullName);
-          document.getElementById("destination").value = fullName;
-        } else if (isStop) {
-          const index = parseInt(type.split("-")[1]);
-          this.stops[index] = { lat, lng, name: fullName };
-          document.getElementById(type).value = fullName;
-        }
+      if (type === 'source') {
+        this.setAsSource(lat, lng, fullName);
+        document.getElementById('source').value = fullName;
+      } else if (type === 'destination') {
+        this.setAsDestination(lat, lng, fullName);
+        document.getElementById('destination').value = fullName;
+      } else if (isStop) {
+        const index = parseInt(type.split("-")[1]);
+        this.stops[index] = { lat, lng, name: fullName };
+        document.getElementById(type).value = fullName;
+      }
 
-        this.saveRecent(fullName);
-        box.innerHTML = "";
-        box.style.display = "none";
-        this.checkAndPlanRoute();
-      };
-      box.appendChild(div);
-    });
-  }
+      this.saveRecent(fullName);
+      box.innerHTML = '';
+      box.style.display = 'none';
+      this.checkAndPlanRoute();
+    };
+    box.appendChild(div);
+  });
+}
+
 
   clearSuggestions(type) {
     const box = document.getElementById(
