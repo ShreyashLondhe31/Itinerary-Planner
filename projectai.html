@@ -1,117 +1,116 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Travel Itinerary Planner</title>
-    <link
-      rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css"
-    />
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <link rel="stylesheet" href="style.css" />
 
-    <!-- Add Leaflet Routing Machine CSS -->
-    <link rel="stylesheet"href="https://cdnjs.cloudflare.com/ajax/libs/leaflet-routing-machine/3.2.12/leaflet-routing-machine.css"/>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet-routing-machine/3.2.12/leaflet-routing-machine.min.js"></script>
-    
-  </head>
-  <body>
-    <div class="container">
-      <div class="header">
-        <h1>🗺️ Travel Itinerary Planner</h1>
-        <p>Plan your journey with interactive maps and smart recommendations</p>
-      </div>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Travel Itinerary Planner</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <link rel="stylesheet" href="style.css" />
 
-      <div class="demo-note">
-        <strong>📍 Demo Mode:</strong> Click anywhere on the map to select
-        locations. This version works offline with sample data to demonstrate
-        full functionality.
-      </div>
+  <!-- Add Leaflet Routing Machine CSS -->
+  <link rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/leaflet-routing-machine/3.2.12/leaflet-routing-machine.css" />
+  <script
+    src="https://cdnjs.cloudflare.com/ajax/libs/leaflet-routing-machine/3.2.12/leaflet-routing-machine.min.js"></script>
 
-      <div class="main-content">
-        <div class="left-panel">
-          <h2>Trip Details</h2>
-          <div class="input-group">
-            <label for="source">Source Location:</label>
-            <div style="position: relative; width: 100%">
-              <input
-                type="text"
-                id="source"
-                placeholder="Enter starting location or click on map"
-              />
-              <div id="sourceSuggestions" class="suggestions-box"></div>
-            </div>
-            <button class="btn search-btn" id="searchSource">Search</button>
+</head>
+
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🗺️ Travel Itinerary Planner</h1>
+      <p>Plan your journey with interactive maps and smart recommendations</p>
+    </div>
+
+    <div class="demo-note">
+      <strong>📍 Demo Mode:</strong> Click anywhere on the map to select
+      locations. This version works offline with sample data to demonstrate
+      full functionality.
+    </div>
+
+    <div class="main-content">
+      <div class="left-panel">
+        <h2>Trip Details</h2>
+        <div class="input-group">
+          <label for="source">Source Location:</label>
+          <div style="position: relative; width: 100%">
+            <input type="text" id="source" placeholder="Enter starting location or click on map" />
+            <div id="sourceSuggestions" class="suggestions-box"></div>
           </div>
-
-          <div id="stopsContainer"></div>
-          <button class="btn" id="addStop">➕ Add Stop</button>
-
-          <div class="input-group">
-            <label for="routeOption">Route Preference:</label>
-            <select id="routeOption">
-              <option value="fastest">Fastest</option>
-              <option value="cheapest">Cheapest</option>
-              <option value="scenic">Scenic</option>
-            </select>
-          </div>
-
-          <div class="input-group">
-            <label for="destination">Destination Location:</label>
-            <div style="position: relative; width: 100%">
-              <input
-                type="text"
-                id="destination"
-                placeholder="Enter destination or click on map"
-              />
-              <div id="destinationSuggestions" class="suggestions-box"></div>
-            </div>
-            <button class="btn search-btn" id="searchDestination">
-              Search
-            </button>
-          </div>
-
-          <button class="btn" id="clearRoute">Clear Route</button>
-
-          <div id="routeInfo" class="route-info" style="display: none">
-            <h3>Route Information</h3>
-            <p><strong>Distance:</strong> <span id="distance">-</span></p>
-            <p><strong>Estimated Time:</strong> <span id="duration">-</span></p>
-            <p>
-              <strong>Route Type:</strong>
-              <span id="routeType">Fastest Route</span>
-            </p>
-          </div>
+          <button class="btn search-btn" id="searchSource">Search</button>
         </div>
 
-        <div class="right-panel">
-          <h2>Interactive Map</h2>
+        <div id="stopsContainer"></div>
+        <button class="btn" id="addStop">➕ Add Stop</button>
+
+        <div class="input-group">
+          <label for="routeOption">Route Preference:</label>
+          <select id="routeOption">
+            <option value="fastest">Fastest</option>
+            <option value="cheapest">Cheapest</option>
+            <option value="scenic">Scenic</option>
+          </select>
+        </div>
+
+        <div class="input-group">
+          <label for="destination">Destination Location:</label>
+          <div style="position: relative; width: 100%">
+            <input type="text" id="destination" placeholder="Enter destination or click on map" />
+            <div id="destinationSuggestions" class="suggestions-box"></div>
+          </div>
+          <button class="btn search-btn" id="searchDestination">
+            Search
+          </button>
+        </div>
+
+        <button class="btn" id="clearRoute">Clear Route</button>
+
+        <div id="routeInfo" class="route-info" style="display: none">
+          <h3>Route Information</h3>
+          <p><strong>Distance:</strong> <span id="distance">-</span></p>
+          <p><strong>Estimated Time:</strong> <span id="duration">-</span></p>
           <p>
-            Click on any location to see details and set as source/destination
+            <strong>Route Type:</strong>
+            <span id="routeType">Fastest Route</span>
           </p>
-          <div id="map"></div>
         </div>
       </div>
 
-      <div class="recommendations">
-        <h2>Recommended Places to Visit</h2>
-        <div id="recommendationsContent">
-          <p class="loading">
-            Select source and destination to get recommendations...
-          </p>
-        </div>
-
-        <div class="export-buttons" style="display: none" id="exportButtons">
-          <button class="btn" id="exportPDF">📄 Export as PDF</button>
-          <button class="btn" id="exportJSON">💾 Export as JSON</button>
-        </div>
-
-
-        <div>testing intekhab</div>
+      <div class="right-panel">
+        <h2>Interactive Map</h2>
+        <p>
+          Click on any location to see details and set as source/destination
+        </p>
+        <div id="map"></div>
       </div>
     </div>
-    <script src="script.js"></script>
-  </body>
+
+    <div class="recommendations">
+      <h2>Recommended Places to Visit</h2>
+      <div id="filterContainer" style="margin-bottom:10px;">
+        <label><input type="checkbox" value="attraction" checked> Attractions</label>
+        <label><input type="checkbox" value="museum" checked> Museums</label>
+        <label><input type="checkbox" value="park" checked> Parks</label>
+        <label><input type="checkbox" value="historic" checked> Historic</label>
+        <label><input type="checkbox" value="place" checked> Others</label>
+      </div>
+
+      <div id="recommendationsContent">
+        <p class="loading">
+          Select source and destination to get recommendations...
+        </p>
+      </div>
+
+      <div class="export-buttons" style="display: none" id="exportButtons">
+        <button class="btn" id="exportPDF">📄 Export as PDF</button>
+        <button class="btn" id="exportJSON">💾 Export as JSON</button>
+      </div>
+    </div>
+  </div>
+  <script src="script.js"></script>
+</body>
+
 </html>
