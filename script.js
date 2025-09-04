@@ -111,9 +111,9 @@ class TravelPlanner {
     const a =
       Math.sin(dLat / 2) * Math.sin(dLat / 2) +
       Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLng / 2) *
-      Math.sin(dLng / 2);
+        Math.cos((lat2 * Math.PI) / 180) *
+        Math.sin(dLng / 2) *
+        Math.sin(dLng / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
   }
@@ -125,9 +125,12 @@ class TravelPlanner {
 
     popupContent.innerHTML = `
                       <h3>📍${locationData.display_name}</h3>
-                      <p><strong>Country:</strong> ${address.country || "📍"}</p>
-                      <p><strong>Coordinates:</strong> ${address.coordinates || "📍"
-      }</p>
+                      <p><strong>Country:</strong> ${
+                        address.country || "📍"
+                      }</p>
+                      <p><strong>Coordinates:</strong> ${
+                        address.coordinates || "📍"
+                      }</p>
                       <div style="margin-top: 10px;">
                           <button class="popup-btn" id="setSourceBtn">Set as Source</button>
                           <button class="popup-btn" id="setDestBtn">Set as Destination</button>
@@ -166,6 +169,8 @@ class TravelPlanner {
       .bindPopup(`🚀 Source: ${name}`);
 
     this.map.closePopup();
+
+    this.clearAllSuggestions(); // 👈 ADD THIS
     this.checkAndPlanRoute();
   }
 
@@ -179,9 +184,11 @@ class TravelPlanner {
 
     this.destinationMarker = L.marker([lat, lng])
       .addTo(this.map)
-      .bindPopup(`🎯Destination: ${name}`);
+      .bindPopup(`🎯 Destination: ${name}`);
 
     this.map.closePopup();
+
+    this.clearAllSuggestions(); // 👈 ADD THIS
     this.checkAndPlanRoute();
   }
 
@@ -214,11 +221,23 @@ class TravelPlanner {
     }
   }
 
-  async checkAndPlanRoute() {
+  checkAndPlanRoute() {
     if (this.sourceLocation && this.destinationLocation) {
+      this.stopsFlat = [];
+      for (let dayStops of this.stops) {
+        if (Array.isArray(dayStops)) {
+          for (let stop of dayStops) {
+            if (stop) this.stopsFlat.push(stop);
+          }
+        }
+      }
+
       this.planRoute();
       this.getRecommendations();
       this.showExportButtons();
+
+      // Add stop markers on the map
+      this.addStopMarkers();
     }
   }
 
@@ -406,10 +425,10 @@ class TravelPlanner {
             (el.tags.historic
               ? `Historic site`
               : el.tags.tourism
-                ? `Tourist attraction`
-                : el.tags.leisure
-                  ? `Leisure spot`
-                  : "Nearby place"),
+              ? `Tourist attraction`
+              : el.tags.leisure
+              ? `Leisure spot`
+              : "Nearby place"),
           lat: el.lat, // Include coordinates from Overpass
           lng: el.lon, // Include coordinates from Overpass
         };
@@ -448,7 +467,7 @@ class TravelPlanner {
             <p>${rec.description}</p>
             <span class="category-tag">${rec.type}</span>
             <button class="btn-small show-on-map" data-lat="${rec.lat}" data-lng="${rec.lng}" data-name="${rec.name}">
-              📍 Show on Map
+             📍 Show on Map
             </button>
           </div>
         `;
@@ -501,11 +520,14 @@ class TravelPlanner {
     input.type = "text";
     input.placeholder = `Enter stop location for Day ${dayIndex + 1}`;
     input.className = "stop-input";
-    input.id = `day${dayIndex}-stop${stopIndex}`;
+    input.id = `day${dayIndex}-stop${stopIndex}`; // Make sure this is set BEFORE the event listener
     input.style.flex = "1";
 
     // Suggestions box for autocomplete
+    // Suggestions box for autocomplete
     const suggestionsBox = document.createElement("div");
+    suggestionsBox.className = "suggestions-box";
+    suggestionsBox.id = `${input.id}-suggestions`; // This will be "day0-stop1-suggestions"
     suggestionsBox.className = "suggestions-box";
     suggestionsBox.id = `${input.id}-suggestions`;
     suggestionsBox.style.position = "absolute";
@@ -532,8 +554,15 @@ class TravelPlanner {
     stopDiv.appendChild(suggestionsBox);
 
     // Bind autocomplete on input
+    // Bind autocomplete on input
     input.addEventListener("input", (e) => {
-      this.autocomplete(e.target.value, input.id);
+      console.log(
+        "Stop input event - ID:",
+        e.target.id,
+        "Value:",
+        e.target.value
+      ); // Debug line
+      this.autocomplete(e.target.value, e.target.id);
     });
 
     // Remove stop handler
@@ -671,8 +700,6 @@ class TravelPlanner {
     }
   }
 
-
-
   // Override checkAndPlanRoute to collect stops from days structure
   checkAndPlanRoute() {
     if (this.sourceLocation && this.destinationLocation) {
@@ -786,7 +813,7 @@ class TravelPlanner {
 
       if (!document.getElementById("tripCost")) {
         const p = document.createElement("p");
-        p.innerHTML = `<strong>Estimated Cost:</strong> <span id="tripCost">-</span>`;
+        p.innerHTML = `<strong>Estimated Cost:</strong>₹<span id="tripCost">-</span>`;
         document.getElementById("routeInfo").appendChild(p);
       }
       document.getElementById("tripCost").textContent = `${cost}`;
@@ -804,7 +831,7 @@ class TravelPlanner {
 
   // Override autocomplete to handle new stop input IDs (dayX-stopY)
   showSuggestions(results, type) {
-    const isStop = type && type.startsWith("day");
+    const isStop = type && type.startsWith("day"); // Correctly identify if it's a day-based stop input
     let boxId;
     if (isStop) {
       boxId = `${type}-suggestions`;
@@ -818,16 +845,12 @@ class TravelPlanner {
 
     const box = document.getElementById(boxId);
     if (!box) return;
-
     box.innerHTML = "";
     box.style.display = results.length ? "block" : "none";
-
     results.forEach((place) => {
       let fullName = place.display_name;
-
       let div = document.createElement("div");
       div.textContent = fullName;
-
       div.onclick = () => {
         const lat = parseFloat(place.lat);
         const lng = parseFloat(place.lon);
@@ -839,20 +862,24 @@ class TravelPlanner {
           this.setAsDestination(lat, lng, fullName);
           document.getElementById("destination").value = fullName;
         } else if (isStop) {
-          // Parse day and stop indices from input id, e.g. day0-stop1
+          // Parse day and stop indices from input id, e.g., "day0-stop1"
           const match = type.match(/^day(\d+)-stop(\d+)$/);
           if (match) {
             const dayIndex = parseInt(match[1], 10);
             const stopIndex = parseInt(match[2], 10);
 
-            if (!this.stops[dayIndex]) this.stops[dayIndex] = [];
+            if (!this.stops[dayIndex]) {
+              this.stops[dayIndex] = [];
+            }
+            // Update the specific stop in the nested array
             this.stops[dayIndex][stopIndex] = { lat, lng, name: fullName };
-
+            // Update the value of the specific stop input field
             const input = document.getElementById(type);
-            if (input) input.value = fullName;
+            if (input) {
+              input.value = fullName;
+            }
           }
         }
-
         this.saveRecent(fullName);
         box.innerHTML = "";
         box.style.display = "none";
@@ -862,6 +889,13 @@ class TravelPlanner {
     });
   }
 
+  clearAllSuggestions() {
+    const boxes = document.querySelectorAll(".suggestions-box");
+    boxes.forEach((box) => {
+      box.innerHTML = "";
+      box.style.display = "none";
+    });
+  }
 
   // Method to add recommendation markers to map
   addRecommendationMarkers() {
@@ -891,6 +925,31 @@ class TravelPlanner {
     });
   }
 
+  addStopMarkers() {
+    if (this.stopMarkers) {
+      this.stopMarkers.forEach((marker) => this.map.removeLayer(marker));
+    }
+    this.stopMarkers = [];
+
+    if (!this.stopsFlat || this.stopsFlat.length === 0) return;
+
+    this.stopsFlat.forEach((stop) => {
+      if (stop && stop.lat && stop.lng) {
+        const icon = L.divIcon({
+          className: "stop-marker",
+          html: "📍",
+          iconSize: [24, 24],
+          iconAnchor: [12, 24],
+          popupAnchor: [0, -24],
+        });
+
+        const marker = L.marker([stop.lat, stop.lng], { icon }).addTo(this.map);
+        marker.bindPopup(`Stop: ${stop.name || "Unnamed"}`);
+        this.stopMarkers.push(marker);
+      }
+    });
+  }
+
   // Method to clear recommendation markers
   clearRecommendationMarkers() {
     this.recommendationMarkers.forEach((marker) => {
@@ -902,33 +961,31 @@ class TravelPlanner {
   // Get appropriate icon for recommendation type
   getRecommendationIcon(type) {
     const iconMap = {
-      'attraction': '🎯',
-      'museum': '🏛️',
-      'gallery': '🖼️',
-      'zoo': '🦁',
-      'theme_park': '🎢',
-      'historic': '🏛️',
-      'park': '🌳',
-      'place': '📍',
-      'fort': '🏰',
-      'palace': '🏰',
-      'temple': '🛕',
-      'church': '⛪',
-      'monument': '🗿',
-      'castle': '🏰',
-      'district': '🏢'
+      attraction: "🎯",
+      museum: "🏛️",
+      gallery: "🖼️",
+      zoo: "🦁",
+      theme_park: "🎢",
+      historic: "🏛️",
+      park: "🌳",
+      place: "📍",
+      fort: "🏰",
+      palace: "🏰",
+      temple: "🛕",
+      church: "⛪",
+      monument: "🗿",
+      castle: "🏰",
+      district: "🏢",
+      memorial: "🏛️",
+      artwork: "🎨",
+      aircraft: "🛦",
     };
 
-    return iconMap[type] || "ðŸ“";
+    return iconMap[type] || "🌍";
   }
 
   clearRoute() {
-  // Full reset: reload the page
-  window.location.reload();
-}
-
-  showExportButtons() {
-    document.getElementById("exportButtons").style.display = "block";
+    window.location.reload();
   }
 
   exportAsPDF() {
@@ -976,10 +1033,15 @@ class TravelPlanner {
     doc.save("travel-itinerary.pdf");
   }
 
-  // --- AUTOCOMPLETE using Nominatim API ---
   autocomplete(query, type) {
-    // Save latest query
-    this.latestQuery[type] = query;
+    // Save latest query - but for day-based stops, we need to handle them differently
+    if (type.startsWith("day")) {
+      // For day-based stops, use the full type as key
+      if (!this.latestQuery[type]) this.latestQuery[type] = "";
+      this.latestQuery[type] = query;
+    } else {
+      this.latestQuery[type] = query;
+    }
 
     // Clear previous debounce timer
     if (this.debounceTimers[type]) {
@@ -1005,7 +1067,10 @@ class TravelPlanner {
         const data = await res.json();
 
         // Only show suggestions if query matches latest input
-        if (this.latestQuery[type] === query) {
+        const currentQuery = type.startsWith("day")
+          ? this.latestQuery[type]
+          : this.latestQuery[type];
+        if (currentQuery === query) {
           this.showSuggestions(data, type);
         }
       } catch (error) {
@@ -1015,59 +1080,22 @@ class TravelPlanner {
     }, 300);
   }
 
-  showSuggestions(results, type) {
-    const isStop = type && type.startsWith("stop-");
-    const boxId = isStop
-      ? type + "-suggestions"
-      : type === "source"
-        ? "sourceSuggestions"
-        : "destinationSuggestions";
+  clearSuggestions(type) {
+    let boxId;
+    if (type.startsWith("day")) {
+      boxId = `${type}-suggestions`;
+    } else if (type === "source") {
+      boxId = "sourceSuggestions";
+    } else if (type === "destination") {
+      boxId = "destinationSuggestions";
+    }
 
     const box = document.getElementById(boxId);
-    if (!box) return;
-
-    box.innerHTML = "";
-    box.style.display = results.length ? "block" : "none";
-
-    results.forEach((place) => {
-      let fullName = place.display_name;
-
-      let div = document.createElement("div");
-      div.textContent = fullName;
-
-      div.onclick = () => {
-        const lat = parseFloat(place.lat);
-        const lng = parseFloat(place.lon);
-
-        if (type === "source") {
-          this.setAsSource(lat, lng, fullName);
-          document.getElementById("source").value = fullName;
-        } else if (type === "destination") {
-          this.setAsDestination(lat, lng, fullName);
-          document.getElementById("destination").value = fullName;
-        } else if (isStop) {
-          const index = parseInt(type.split("-")[1]);
-          this.stops[index] = { lat, lng, name: fullName };
-          document.getElementById(type).value = fullName;
-        }
-
-        this.saveRecent(fullName);
-        box.innerHTML = "";
-        box.style.display = "none";
-        this.checkAndPlanRoute();
-      };
-      box.appendChild(div);
-    });
+    if (box) {
+      box.innerHTML = "";
+      box.style.display = "none";
+    }
   }
-
-  clearSuggestions(type) {
-    const box = document.getElementById(
-      type === "source" ? "sourceSuggestions" : "destinationSuggestions"
-    );
-    box.innerHTML = "";
-    box.style.display = "none";
-  }
-
 
   // --- RECENT & FAVORITES (localStorage) ---
   saveRecent(location) {
@@ -1102,7 +1130,6 @@ class TravelPlanner {
       alert("Failed to geocode the favorite location. Please try again.");
     }
   }
-
 
   renderFavorites(type) {
     const favoritesContainer = document.getElementById(`${type}Favorites`);
@@ -1140,7 +1167,6 @@ class TravelPlanner {
       favoritesContainer.appendChild(favItem);
     });
   }
-
 
   updateFavoriteToggle(type) {
     const inputId = type === "source" ? "source" : "destination";
@@ -1207,8 +1233,12 @@ class TravelPlanner {
     const div = document.createElement("div");
     div.className = "input-group stop-group";
 
-    const dayNumber = this.tripDuration > 0 ? currentStops + 1 : currentStops + 1;
-    const label = this.tripDuration > 0 ? `Day ${dayNumber} Stop:` : `Stop ${currentStops + 1}:`;
+    const dayNumber =
+      this.tripDuration > 0 ? currentStops + 1 : currentStops + 1;
+    const label =
+      this.tripDuration > 0
+        ? `Day ${dayNumber} Stop:`
+        : `Stop ${currentStops + 1}:`;
 
     div.innerHTML = `
       <label>${label}</label>
@@ -1308,16 +1338,28 @@ class TravelPlanner {
   bindEvents() {
     document
       .getElementById("source")
-      .addEventListener("input", (e) => this.autocomplete(e.target.value, "source"));
+      .addEventListener("input", (e) =>
+        this.autocomplete(e.target.value, "source")
+      );
     document
       .getElementById("destination")
-      .addEventListener("input", (e) => this.autocomplete(e.target.value, "destination"));
+      .addEventListener("input", (e) =>
+        this.autocomplete(e.target.value, "destination")
+      );
     // Remove this line:
     // document.getElementById("addStop").addEventListener("click", () => this.addStopField());
-    document.getElementById("clearRoute").addEventListener("click", () => this.clearRoute());
-    document.getElementById("exportPDF").addEventListener("click", () => this.exportAsPDF());
-    document.getElementById("exportJSON").addEventListener("click", () => this.exportAsJSON());
-    document.getElementById("setDuration").addEventListener("click", () => this.setTripDuration());
+    document
+      .getElementById("clearRoute")
+      .addEventListener("click", () => this.clearRoute());
+    document
+      .getElementById("exportPDF")
+      .addEventListener("click", () => this.exportAsPDF());
+    document
+      .getElementById("exportJSON")
+      .addEventListener("click", () => this.exportAsJSON());
+    document
+      .getElementById("setDuration")
+      .addEventListener("click", () => this.setTripDuration());
     document.getElementById("searchSource").addEventListener("click", () => {
       const query = document.getElementById("source").value;
       this.searchLocation(query, "source");
