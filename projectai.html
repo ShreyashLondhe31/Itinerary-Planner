@@ -15,18 +15,17 @@
     href="https://cdnjs.cloudflare.com/ajax/libs/leaflet-routing-machine/3.2.12/leaflet-routing-machine.css" />
   <script
     src="https://cdnjs.cloudflare.com/ajax/libs/leaflet-routing-machine/3.2.12/leaflet-routing-machine.min.js"></script>
-
 </head>
 
 <body>
   <div class="container">
     <div class="header">
-      <h1>🗺️ Travel Itinerary Planner</h1>
+      <h1>🗺️Travel Itinerary Planner</h1>
       <p>Plan your journey with interactive maps and smart recommendations</p>
     </div>
 
     <div class="demo-note">
-      <strong>📍 Demo Mode:</strong> Click anywhere on the map to select
+      <strong>ðŸ“ Demo Mode:</strong> Click anywhere on the map to select
       locations. This version works offline with sample data to demonstrate
       full functionality.
     </div>
@@ -38,13 +37,35 @@
           <label for="source">Source Location:</label>
           <div style="position: relative; width: 100%">
             <input type="text" id="source" placeholder="Enter starting location or click on map" />
+            <button class="btn-fav-toggle" id="toggleSourceFavorite" title="Add to favorites">⭐</button>
             <div id="sourceSuggestions" class="suggestions-box"></div>
           </div>
+          <div id="sourceFavorites" class="favorites-list"></div>
           <button class="btn search-btn" id="searchSource">Search</button>
         </div>
+        <div class="input-group">
+          <label for="destination">Destination Location:</label>
+          <div style="position: relative; width: 100%">
+            <input type="text" id="destination" placeholder="Enter destination or click on map" />
+            <button class="btn-fav-toggle" id="toggleDestinationFavorite" title="Add to favorites">⭐</button>
+            <div id="destinationSuggestions" class="suggestions-box"></div>
+          </div>
+          <div id="destinationFavorites" class="favorites-list"></div>
+          <button class="btn search-btn" id="searchDestination">
+            Search
+          </button>
+        </div>
 
-        <div id="stopsContainer"></div>
-        <button class="btn" id="addStop">➕ Add Stop</button>
+
+        <div id="daysContainer"></div>
+        <div class="input-group">
+          <label for="tripDuration">Trip Duration:</label>
+          <div style="display: flex; gap: 10px; align-items: center;">
+            <button class="btn" id="setDuration">📅 Duration of Stay (in Days)</button>
+            <span id="durationDisplay" style="display: none; font-weight: 600; color: #667eea;"></span>
+          </div>
+        </div>
+
 
         <div class="input-group">
           <label for="routeOption">Route Preference:</label>
@@ -53,17 +74,6 @@
             <option value="cheapest">Cheapest</option>
             <option value="scenic">Scenic</option>
           </select>
-        </div>
-
-        <div class="input-group">
-          <label for="destination">Destination Location:</label>
-          <div style="position: relative; width: 100%">
-            <input type="text" id="destination" placeholder="Enter destination or click on map" />
-            <div id="destinationSuggestions" class="suggestions-box"></div>
-          </div>
-          <button class="btn search-btn" id="searchDestination">
-            Search
-          </button>
         </div>
 
         <button class="btn" id="clearRoute">Clear Route</button>
@@ -90,22 +100,17 @@
 
     <div class="recommendations">
       <h2>Recommended Places to Visit</h2>
-      <div id="filterContainer" style="margin-bottom:10px;">
-        <label><input type="checkbox" value="attraction" checked> Attractions</label>
-        <label><input type="checkbox" value="museum" checked> Museums</label>
-        <label><input type="checkbox" value="park" checked> Parks</label>
-        <label><input type="checkbox" value="historic" checked> Historic</label>
-        <label><input type="checkbox" value="place" checked> Others</label>
-      </div>
-
       <div id="recommendationsContent">
         <p class="loading">
           Select source and destination to get recommendations...
         </p>
       </div>
 
+      <div>
+        Hello this is testing
+      </div>
       <div class="export-buttons" style="display: none" id="exportButtons">
-        <button class="btn" id="exportPDF">📄 Export as PDF</button>
+        <button class="btn" id="exportPDF">📄Export as PDF</button>
         <button class="btn" id="exportJSON">💾 Export as JSON</button>
       </div>
     </div>
