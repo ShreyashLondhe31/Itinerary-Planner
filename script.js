@@ -169,6 +169,8 @@ class TravelPlanner {
       .bindPopup(`🚀 Source: ${name}`);
 
     this.map.closePopup();
+
+    this.clearAllSuggestions(); // 👈 ADD THIS
     this.checkAndPlanRoute();
   }
 
@@ -182,9 +184,11 @@ class TravelPlanner {
 
     this.destinationMarker = L.marker([lat, lng])
       .addTo(this.map)
-      .bindPopup(`🎯Destination: ${name}`);
+      .bindPopup(`🎯 Destination: ${name}`);
 
     this.map.closePopup();
+
+    this.clearAllSuggestions(); // 👈 ADD THIS
     this.checkAndPlanRoute();
   }
 
@@ -463,7 +467,7 @@ class TravelPlanner {
             <p>${rec.description}</p>
             <span class="category-tag">${rec.type}</span>
             <button class="btn-small show-on-map" data-lat="${rec.lat}" data-lng="${rec.lng}" data-name="${rec.name}">
-              📍 Show on Map
+             📍 Show on Map
             </button>
           </div>
         `;
@@ -885,6 +889,14 @@ class TravelPlanner {
     });
   }
 
+  clearAllSuggestions() {
+    const boxes = document.querySelectorAll(".suggestions-box");
+    boxes.forEach((box) => {
+      box.innerHTML = "";
+      box.style.display = "none";
+    });
+  }
+
   // Method to add recommendation markers to map
   addRecommendationMarkers() {
     this.recommendations.forEach((rec) => {
@@ -966,64 +978,14 @@ class TravelPlanner {
       district: "🏢",
       memorial: "🏛️",
       artwork: "🎨",
-      aircraft: "🛦"
+      aircraft: "🛦",
     };
 
     return iconMap[type] || "🌍";
   }
 
   clearRoute() {
-    // Clear source marker
-    if (this.sourceMarker) {
-      this.map.removeLayer(this.sourceMarker);
-      this.sourceMarker = null;
-    }
-
-    // Clear destination marker
-    if (this.destinationMarker) {
-      this.map.removeLayer(this.destinationMarker);
-      this.destinationMarker = null;
-    }
-
-    // Clear routing control (route layer)
-    if (this.routeLayer) {
-      this.map.removeControl(this.routeLayer);
-      this.routeLayer = null;
-    }
-
-    // Clear all stop input groups from the UI
-    this.stops.forEach((stop, index) => {
-      const stopGroup = document.getElementById(`stop-group-${index}`);
-      if (stopGroup) stopGroup.remove();
-    });
-    this.stops = [];
-    this.tripDuration = 0;
-    document.getElementById("durationDisplay").style.display = "none";
-    document.getElementById("addStop").textContent = "➕ Add Stop";
-    document.getElementById("addStop").style.display = "inline-block";
-
-    // Clear input fields and UI elements
-    document.getElementById("source").value = "";
-    document.getElementById("destination").value = "";
-    document.getElementById("routeInfo").style.display = "none";
-    document.getElementById("recommendationsContent").innerHTML =
-      '<p class="loading">Select source and destination to get recommendations...</p>';
-    document.getElementById("exportButtons").style.display = "none";
-
-    // Reset stored locations and recommendations
-    this.sourceLocation = null;
-    this.destinationLocation = null;
-    this.recommendations = [];
-
-    // Clear recommendation markers from the map
-    this.clearRecommendationMarkers();
-
-    // Reset map view to default
-    this.map.setView([20.5937, 78.9629], 5);
-  }
-
-  showExportButtons() {
-    document.getElementById("exportButtons").style.display = "block";
+    window.location.reload();
   }
 
   exportAsPDF() {
