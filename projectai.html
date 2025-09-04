@@ -20,12 +20,12 @@
 <body>
   <div class="container">
     <div class="header">
-      <h1>🗺️ Travel Itinerary Planner</h1>
+      <h1>🗺️Travel Itinerary Planner</h1>
       <p>Plan your journey with interactive maps and smart recommendations</p>
     </div>
 
     <div class="demo-note">
-      <strong>📍 Demo Mode:</strong> Click anywhere on the map to select
+      <strong>ðŸ“ Demo Mode:</strong> Click anywhere on the map to select
       locations. This version works offline with sample data to demonstrate
       full functionality.
     </div>
@@ -57,8 +57,15 @@
         </div>
 
 
-        <div id="stopsContainer"></div>
-        <button class="btn" id="addStop">➕ Add Stop</button>
+        <div id="daysContainer"></div>
+        <div class="input-group">
+          <label for="tripDuration">Trip Duration:</label>
+          <div style="display: flex; gap: 10px; align-items: center;">
+            <button class="btn" id="setDuration">📅 Duration of Stay (in Days)</button>
+            <span id="durationDisplay" style="display: none; font-weight: 600; color: #667eea;"></span>
+          </div>
+        </div>
+
 
         <div class="input-group">
           <label for="routeOption">Route Preference:</label>
@@ -103,7 +110,7 @@
         Hello this is testing
       </div>
       <div class="export-buttons" style="display: none" id="exportButtons">
-        <button class="btn" id="exportPDF">📄 Export as PDF</button>
+        <button class="btn" id="exportPDF">📄Export as PDF</button>
         <button class="btn" id="exportJSON">💾 Export as JSON</button>
       </div>
     </div>
