@@ -923,54 +923,9 @@ class TravelPlanner {
   }
 
   clearRoute() {
-    // Clear source marker
-    if (this.sourceMarker) {
-      this.map.removeLayer(this.sourceMarker);
-      this.sourceMarker = null;
-    }
-
-    // Clear destination marker
-    if (this.destinationMarker) {
-      this.map.removeLayer(this.destinationMarker);
-      this.destinationMarker = null;
-    }
-
-    // Clear routing control (route layer)
-    if (this.routeLayer) {
-      this.map.removeControl(this.routeLayer);
-      this.routeLayer = null;
-    }
-
-    // Clear all stop input groups from the UI
-    this.stops.forEach((stop, index) => {
-      const stopGroup = document.getElementById(`stop-group-${index}`);
-      if (stopGroup) stopGroup.remove();
-    });
-    this.stops = [];
-    this.tripDuration = 0;
-    document.getElementById("durationDisplay").style.display = "none";
-    document.getElementById("addStop").textContent = "➕ Add Stop";
-    document.getElementById("addStop").style.display = "inline-block";
-
-    // Clear input fields and UI elements
-    document.getElementById("source").value = "";
-    document.getElementById("destination").value = "";
-    document.getElementById("routeInfo").style.display = "none";
-    document.getElementById("recommendationsContent").innerHTML =
-      '<p class="loading">Select source and destination to get recommendations...</p>';
-    document.getElementById("exportButtons").style.display = "none";
-
-    // Reset stored locations and recommendations
-    this.sourceLocation = null;
-    this.destinationLocation = null;
-    this.recommendations = [];
-
-    // Clear recommendation markers from the map
-    this.clearRecommendationMarkers();
-
-    // Reset map view to default
-    this.map.setView([20.5937, 78.9629], 5);
-  }
+  // Full reset: reload the page
+  window.location.reload();
+}
 
   showExportButtons() {
     document.getElementById("exportButtons").style.display = "block";
