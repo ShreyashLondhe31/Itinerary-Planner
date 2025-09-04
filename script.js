@@ -989,192 +989,399 @@ class TravelPlanner {
   }
 
   // Enhanced PDF Export Function with Fixed Encoding - Replace the existing exportAsPDF method
-exportAsPDF() {
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF();
-
-  // Define colors
-  const primaryColor = [102, 126, 234]; // #667eea
-  const textColor = [34, 34, 34]; // #222
-  const lightGray = [128, 128, 128]; // #808080
-  let yPos = 20;
-
-  // Header section
-  doc.setFillColor(255, 255, 255);
-  doc.rect(0, 0, 210, 60, "F");
-
-  // Left colored block
-  doc.setFillColor(102, 126, 234);
-  doc.rect(10, 20, 40, 20, "F");
-
-  // Right colored block
-  doc.setFillColor(118, 75, 162);
-  doc.rect(160, 20, 40, 20, "F");
-
-  // Title text
-  doc.setTextColor(0);
-  doc.setFontSize(32);
-  doc.setFont("helvetica", "bold");
-  doc.text("Travel Itinerary", 105, 35, { align: "center" });
-
-  yPos = 70;
-
-  // Trip summary box
-  doc.setFillColor(245, 245, 245);
-  doc.rect(15, yPos - 5, 180, 25, "F");
-  doc.setDrawColor(...lightGray);
-  doc.rect(15, yPos - 5, 180, 25);
-
-  doc.setTextColor(...primaryColor);
-  doc.setFontSize(12);
-  doc.setFont("helvetica", "bold");
-  doc.text("Trip Summary", 20, yPos + 3);
-
-  doc.setTextColor(...textColor);
-  doc.setFontSize(10);
-  doc.setFont("helvetica", "normal");
-
-  if (this.sourceLocation && this.destinationLocation) {
-    doc.text(`From: ${this.cleanText(this.sourceLocation.name)}`, 20, yPos + 10);
-    doc.text(`To: ${this.cleanText(this.destinationLocation.name)}`, 20, yPos + 16);
-  }
-
-  // Route info
-  if (document.getElementById("routeInfo").style.display !== "none") {
-    const distance = document.getElementById("distance").textContent;
-    const duration = document.getElementById("duration").textContent;
-    const cost = document.getElementById("tripCost")?.textContent || "N/A";
-
-    doc.text(
-      `Distance: ${distance} | Duration: ${duration} | Cost: Rs.${cost}`,
-      110,
-      yPos + 10
-    );
-  }
-
-  yPos += 35;
-
-  // Get top 5 recommendations
-  const topRecommendations = this.getTopRecommendations(5);
-
-  // Create daily itinerary
-  if (this.tripDuration > 0) {
-    for (let dayIndex = 0; dayIndex < this.tripDuration; dayIndex++) {
-      if (yPos > 220) {
-        doc.addPage();
-        yPos = 20;
+    exportAsPDF() {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+      
+      // Color palette
+      const colors = {
+        primary: [102, 126, 234],      // #667eea
+        secondary: [118, 75, 162],     // #764ba2
+        accent: [240, 147, 251],       // #f093fb
+        dark: [34, 34, 34],            // #222222
+        gray: [108, 117, 125],         // #6c757d
+        lightGray: [248, 249, 250],    // #f8f9fa
+        success: [40, 167, 69],        // #28a745
+        white: [255, 255, 255]
+      };
+      
+      let currentY = 20;
+      const pageWidth = 210;
+      const pageHeight = 297;
+      const margin = 20;
+      const contentWidth = pageWidth - (margin * 2);
+      
+      // Helper functions
+      const addNewPageIfNeeded = (requiredSpace = 40) => {
+        if (currentY + requiredSpace > pageHeight - 30) {
+          doc.addPage();
+          currentY = 20;
+          return true;
+        }
+        return false;
+      };
+      
+      const drawGradientRect = (x, y, width, height, color1, color2) => {
+        // Simulate gradient with multiple rectangles
+        const steps = 10;
+        for (let i = 0; i < steps; i++) {
+          const ratio = i / steps;
+          const r = Math.round(color1[0] + (color2[0] - color1[0]) * ratio);
+          const g = Math.round(color1[1] + (color2[1] - color1[1]) * ratio);
+          const b = Math.round(color1[2] + (color2[2] - color1[2]) * ratio);
+          
+          doc.setFillColor(r, g, b);
+          doc.rect(x, y + (i * height / steps), width, height / steps, 'F');
+        }
+      };
+      
+      const drawIconBox = (x, y, size, icon, bgColor, textColor) => {
+        doc.setFillColor(...bgColor);
+        doc.roundedRect(x, y, size, size, 3, 3, 'F');
+        doc.setTextColor(...textColor);
+        doc.setFontSize(14);
+        doc.setFont('helvetica', 'bold');
+        doc.text(icon, x + size/2, y + size/2 + 2, { align: 'center' });
+      };
+      
+      // HEADER SECTION
+      // Create a modern header with gradient background
+      drawGradientRect(0, 0, pageWidth, 60, colors.primary, colors.secondary);
+      
+      // Add geometric shapes for visual interest
+      doc.setFillColor(...colors.accent);
+      doc.circle(40, 20, 8, 'F');
+      doc.setFillColor(...colors.white);
+      doc.circle(pageWidth - 40, 40, 6, 'F');
+      
+      // Main title
+      doc.setTextColor(...colors.white);
+      doc.setFontSize(28);
+      doc.setFont('helvetica', 'bold');
+      doc.text('TRAVEL ITINERARY', pageWidth/2, 35, { align: 'center' });
+      
+      // Subtitle
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'normal');
+      doc.text('Your Journey Awaits', pageWidth/2, 45, { align: 'center' });
+      
+      currentY = 80;
+      
+      // TRIP OVERVIEW CARD
+      addNewPageIfNeeded(50);
+      
+      // Card background with shadow effect
+      doc.setFillColor(245, 245, 245);
+      doc.roundedRect(margin - 2, currentY + 2, contentWidth, 45, 8, 8, 'F'); // Shadow
+      doc.setFillColor(...colors.white);
+      doc.roundedRect(margin, currentY, contentWidth, 45, 8, 8, 'F');
+      doc.setDrawColor(...colors.lightGray);
+      doc.roundedRect(margin, currentY, contentWidth, 45, 8, 8, 'S');
+      
+      // Trip overview content
+      doc.setTextColor(...colors.primary);
+      doc.setFontSize(16);
+      doc.setFont('helvetica', 'bold');
+      doc.text('TRIP OVERVIEW', margin + 10, currentY + 15);
+      
+      // Route information
+      if (this.sourceLocation && this.destinationLocation) {
+        doc.setTextColor(...colors.dark);
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'normal');
+        
+        // From location with icon
+        drawIconBox(margin + 10, currentY + 20, 8, 'A', colors.success, colors.white);
+        doc.text(`From: ${this.cleanText(this.sourceLocation.name)}`, margin + 25, currentY + 26);
+        
+        // To location with icon
+        drawIconBox(margin + 10, currentY + 32, 8, 'B', colors.primary, colors.white);
+        doc.text(`To: ${this.cleanText(this.destinationLocation.name)}`, margin + 25, currentY + 38);
+        
+        // Route statistics
+        if (document.getElementById("routeInfo").style.display !== "none") {
+          const distance = document.getElementById("distance").textContent;
+          const duration = document.getElementById("duration").textContent;
+          const cost = document.getElementById("tripCost")?.textContent || "N/A";
+          
+          // Statistics boxes
+          const statY = currentY + 20;
+          const statBoxWidth = 35;
+          const startX = pageWidth - margin - (statBoxWidth * 3) - 20;
+          
+          // Distance box
+          doc.setFillColor(...colors.lightGray);
+          doc.roundedRect(startX, statY, statBoxWidth, 20, 4, 4, 'F');
+          doc.setTextColor(...colors.primary);
+          doc.setFontSize(8);
+          doc.setFont('helvetica', 'bold');
+          doc.text('DISTANCE', startX + statBoxWidth/2, statY + 6, { align: 'center' });
+          doc.setTextColor(...colors.dark);
+          doc.setFontSize(10);
+          doc.text(distance, startX + statBoxWidth/2, statY + 14, { align: 'center' });
+          
+          // Duration box
+          doc.setFillColor(...colors.lightGray);
+          doc.roundedRect(startX + statBoxWidth + 5, statY, statBoxWidth, 20, 4, 4, 'F');
+          doc.setTextColor(...colors.primary);
+          doc.setFontSize(8);
+          doc.setFont('helvetica', 'bold');
+          doc.text('TIME', startX + statBoxWidth + 5 + statBoxWidth/2, statY + 6, { align: 'center' });
+          doc.setTextColor(...colors.dark);
+          doc.setFontSize(10);
+          doc.text(duration, startX + statBoxWidth + 5 + statBoxWidth/2, statY + 14, { align: 'center' });
+          
+          // Cost box
+          doc.setFillColor(...colors.lightGray);
+          doc.roundedRect(startX + (statBoxWidth + 5) * 2, statY, statBoxWidth, 20, 4, 4, 'F');
+          doc.setTextColor(...colors.primary);
+          doc.setFontSize(8);
+          doc.setFont('helvetica', 'bold');
+          doc.text('COST', startX + (statBoxWidth + 5) * 2 + statBoxWidth/2, statY + 6, { align: 'center' });
+          doc.setTextColor(...colors.dark);
+          doc.setFontSize(10);
+          doc.text(`₹${cost}`, startX + (statBoxWidth + 5) * 2 + statBoxWidth/2, statY + 14, { align: 'center' });
+        }
       }
-
-      yPos = this.createDaySchedule(
-        doc,
-        dayIndex + 1,
-        yPos,
-        topRecommendations
-      );
-      yPos += 10;
-    }
-  } else {
-    // If no trip duration set, create a single day itinerary
-    yPos = this.createDaySchedule(doc, 1, yPos, topRecommendations);
-  }
-
-  // Top Recommended Places Section
-  if (topRecommendations.length > 0) {
-    if (yPos > 200) {
-      doc.addPage();
-      yPos = 20;
-    }
-
-    // Section header
-    doc.setFillColor(...primaryColor);
-    doc.rect(0, yPos - 5, 210, 15, "F");
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(14);
-    doc.setFont("helvetica", "bold");
-    doc.text("Top Recommended Places", 20, yPos + 5);
-    yPos += 20;
-
-    topRecommendations.forEach((rec, index) => {
-      if (yPos > 270) {
-        doc.addPage();
-        yPos = 20;
+      
+      currentY += 60;
+      
+      // DAILY ITINERARY SECTION
+      if (this.tripDuration > 0) {
+        addNewPageIfNeeded(40);
+        
+        // Section header
+        doc.setFillColor(...colors.primary);
+        doc.roundedRect(margin, currentY, contentWidth, 20, 6, 6, 'F');
+        doc.setTextColor(...colors.white);
+        doc.setFontSize(14);
+        doc.setFont('helvetica', 'bold');
+        doc.text('DAILY ITINERARY', margin + 10, currentY + 13);
+        
+        currentY += 30;
+        
+        // Generate daily schedules
+        for (let dayIndex = 0; dayIndex < this.tripDuration; dayIndex++) {
+          addNewPageIfNeeded(120);
+          
+          // Day card
+          doc.setFillColor(...colors.white);
+          doc.roundedRect(margin, currentY, contentWidth, 100, 8, 8, 'F');
+          doc.setDrawColor(...colors.primary);
+          doc.setLineWidth(1);
+          doc.roundedRect(margin, currentY, contentWidth, 100, 8, 8, 'S');
+          
+          // Day number circle
+          doc.setFillColor(...colors.primary);
+          doc.circle(margin + 20, currentY + 20, 12, 'F');
+          doc.setTextColor(...colors.white);
+          doc.setFontSize(16);
+          doc.setFont('helvetica', 'bold');
+          doc.text(`${dayIndex + 1}`, margin + 20, currentY + 24, { align: 'center' });
+          
+          // Day title and date
+          doc.setTextColor(...colors.dark);
+          doc.setFontSize(16);
+          doc.setFont('helvetica', 'bold');
+          doc.text(`Day ${dayIndex + 1}`, margin + 40, currentY + 18);
+          
+          const currentDate = new Date();
+          currentDate.setDate(currentDate.getDate() + dayIndex);
+          doc.setFontSize(10);
+          doc.setFont('helvetica', 'normal');
+          doc.setTextColor(...colors.gray);
+          doc.text(currentDate.toLocaleDateString('en-US', { 
+            weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' 
+          }), margin + 40, currentY + 26);
+          
+          // Timeline
+          const timelineX = margin + 15;
+          doc.setDrawColor(...colors.lightGray);
+          doc.setLineWidth(2);
+          doc.line(timelineX, currentY + 35, timelineX, currentY + 90);
+          
+          // Schedule items
+          const scheduleItems = [
+            { time: '08:00', activity: 'Breakfast & Preparation', icon: '☀️' },
+            { time: '10:00', activity: this.getDayActivity(dayIndex, 0), icon: '📍' },
+            { time: '14:00', activity: 'Lunch & Rest', icon: '🍽️' },
+            { time: '16:00', activity: this.getDayActivity(dayIndex, 1), icon: '🎯' },
+            { time: '19:00', activity: 'Dinner & Relaxation', icon: '🌙' }
+          ];
+          
+          scheduleItems.forEach((item, index) => {
+            const itemY = currentY + 40 + (index * 12);
+            
+            // Time dot
+            doc.setFillColor(...colors.primary);
+            doc.circle(timelineX, itemY, 3, 'F');
+            
+            // Time
+            doc.setTextColor(...colors.primary);
+            doc.setFontSize(9);
+            doc.setFont('helvetica', 'bold');
+            doc.text(item.time, margin + 25, itemY + 2);
+            
+            // Activity
+            doc.setTextColor(...colors.dark);
+            doc.setFontSize(9);
+            doc.setFont('helvetica', 'normal');
+            const activityText = doc.splitTextToSize(item.activity, contentWidth - 80);
+            doc.text(activityText, margin + 50, itemY + 2);
+          });
+          
+          currentY += 115;
+        }
       }
+      
+      // RECOMMENDATIONS SECTION
+      const topRecommendations = this.getTopRecommendations(8);
+      if (topRecommendations.length > 0) {
+        addNewPageIfNeeded(50);
+        
+        // Section header
+        doc.setFillColor(...colors.secondary);
+        doc.roundedRect(margin, currentY, contentWidth, 20, 6, 6, 'F');
+        doc.setTextColor(...colors.white);
+        doc.setFontSize(14);
+        doc.setFont('helvetica', 'bold');
+        doc.text('RECOMMENDED PLACES', margin + 10, currentY + 13);
+        
+        currentY += 35;
+        
+        // Create two-column layout for recommendations
+        const colWidth = (contentWidth - 10) / 2;
+        let leftColY = currentY;
+        let rightColY = currentY;
+        
+        topRecommendations.forEach((rec, index) => {
+          const isLeftColumn = index % 2 === 0;
+          const colX = isLeftColumn ? margin : margin + colWidth + 10;
+          const colY = isLeftColumn ? leftColY : rightColY;
+          
+          addNewPageIfNeeded(60);
+          if (currentY === 20) { // New page was added
+            leftColY = currentY;
+            rightColY = currentY;
+          }
+          
+          // Recommendation card
+          doc.setFillColor(...colors.white);
+          doc.roundedRect(colX, colY, colWidth, 45, 6, 6, 'F');
+          doc.setDrawColor(...colors.lightGray);
+          doc.roundedRect(colX, colY, colWidth, 45, 6, 6, 'S');
+          
+          // Category icon
+          const categoryIcon = this.getCategoryIcon(rec.type);
+          drawIconBox(colX + 8, colY + 8, 12, categoryIcon, colors.primary, colors.white);
+          
+          // Name
+          doc.setTextColor(...colors.dark);
+          doc.setFontSize(11);
+          doc.setFont('helvetica', 'bold');
+          const nameText = doc.splitTextToSize(this.cleanText(rec.name), colWidth - 30);
+          doc.text(nameText, colX + 25, colY + 15);
+          
+          // Type badge
+          doc.setFillColor(...colors.accent);
+          doc.roundedRect(colX + 8, colY + 25, 25, 8, 3, 3, 'F');
+          doc.setTextColor(...colors.white);
+          doc.setFontSize(7);
+          doc.setFont('helvetica', 'bold');
+          doc.text(rec.type.toUpperCase(), colX + 20.5, colY + 30, { align: 'center' });
+          
+          // Description
+          doc.setTextColor(...colors.gray);
+          doc.setFontSize(8);
+          doc.setFont('helvetica', 'normal');
+          const descText = doc.splitTextToSize(this.cleanText(rec.description), colWidth - 20);
+          doc.text(descText.slice(0, 2), colX + 8, colY + 37);
+          
+          // Update column positions
+          if (isLeftColumn) {
+            leftColY += 55;
+          } else {
+            rightColY += 55;
+          }
+        });
+        
+        currentY = Math.max(leftColY, rightColY) + 20;
+      }
+      
+      // FOOTER
+      const pageCount = doc.internal.getNumberOfPages();
+      for (let pageIndex = 1; pageIndex <= pageCount; pageIndex++) {
+        doc.setPage(pageIndex);
+        
+        // Footer background
+        doc.setFillColor(...colors.lightGray);
+        doc.rect(0, pageHeight - 20, pageWidth, 20, 'F');
+        
+        // Footer content
+        doc.setTextColor(...colors.gray);
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'normal');
+        
+        const footerText = `Generated on ${new Date().toLocaleDateString('en-US', {
+          year: 'numeric', month: 'long', day: 'numeric'
+        })} • Travel Itinerary Planner`;
+        doc.text(footerText, margin, pageHeight - 8);
+        doc.text(`${pageIndex} / ${pageCount}`, pageWidth - margin, pageHeight - 8, { align: 'right' });
+      }
+      
+      // Save the PDF
+      const fileName = this.generateFileName();
+      doc.save(fileName);
+    }
 
-      doc.setTextColor(...textColor);
-      doc.setFontSize(11);
-      doc.setFont("helvetica", "bold");
-      doc.text(`${index + 1}. ${this.cleanText(rec.name)}`, 20, yPos);
+    // Helper methods for the PDF export
+    getDayActivity(dayIndex, activityIndex) {
+      const dayStops = this.stops && this.stops[dayIndex] 
+        ? this.stops[dayIndex].filter(stop => stop && stop.name) 
+        : [];
+        
+      if (dayStops.length > activityIndex) {
+        return `Visit ${this.cleanText(dayStops[activityIndex].name)}`;
+      }
+      
+      const recommendations = this.getTopRecommendations();
+      if (recommendations.length > dayIndex + activityIndex) {
+        const rec = recommendations[dayIndex + activityIndex];
+        return `Explore ${this.cleanText(rec.name)}`;
+      }
+      
+      return activityIndex === 0 ? 'Morning sightseeing' : 'Afternoon exploration';
+    }
 
-      doc.setTextColor(...lightGray);
-      doc.setFontSize(9);
-      doc.setFont("helvetica", "normal");
-      doc.text(`[${rec.type}] - ${rec.area}`, 20, yPos + 6);
+    getCategoryIcon(type) {
+      const iconMap = {
+        attraction: 'A', museum: 'M', gallery: 'G', zoo: 'Z',
+        theme_park: 'P', historic: 'H', park: 'P', place: 'L',
+        fort: 'F', palace: 'P', temple: 'T', church: 'C',
+        monument: 'M', castle: 'C', memorial: 'M', artwork: 'A'
+      };
+      return iconMap[type] || 'L';
+    }
 
-      doc.setTextColor(...textColor);
-      doc.setFontSize(9);
-      const description = doc.splitTextToSize(
-        this.cleanText(rec.description),
-        170
-      );
-      doc.text(description, 20, yPos + 12);
+    generateFileName() {
+      if (this.sourceLocation && this.destinationLocation) {
+        const from = this.cleanFilename(this.sourceLocation.name);
+        const to = this.cleanFilename(this.destinationLocation.name);
+        return `${from}_to_${to}_itinerary.pdf`;
+      }
+      return 'travel_itinerary.pdf';
+    }
 
-      yPos += 12 + description.length * 3.5 + 8;
-    });
-  }
+    cleanFilename(text) {
+      if (!text) return 'location';
+      return text.replace(/[^\w\s-]/g, '').replace(/\s+/g, '_').toLowerCase();
+    }
 
-  // Footer
-  const pageCount = doc.internal.getNumberOfPages();
-  for (let i = 1; i <= pageCount; i++) {
-    doc.setPage(i);
-    doc.setFillColor(248, 248, 248);
-    doc.rect(0, 285, 210, 12, "F");
+    cleanText(text) {
+      if (!text) return '';
+      return text.replace(/[^\x00-\x7F]/g, '').replace(/[""]/g, '"').replace(/['']/g, "'").trim();
+    }
 
-    doc.setTextColor(...lightGray);
-    doc.setFontSize(8);
-    doc.setFont("helvetica", "normal");
-    doc.text(
-      `Generated on ${new Date().toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-      })} | Travel Itinerary Planner`,
-      15,
-      291
-    );
-    doc.text(`Page ${i} of ${pageCount}`, 175, 291);
-  }
-
-  // Save with smart filename
-  const fileName =
-    this.sourceLocation && this.destinationLocation
-      ? `${this.cleanFilename(
-          this.sourceLocation.name
-        )}_to_${this.cleanFilename(
-          this.destinationLocation.name
-        )}_itinerary.pdf`
-      : "travel-itinerary.pdf";
-
-  doc.save(fileName);
-}
-
-// Helper method to clean text and remove problematic characters
-cleanText(text) {
-  if (!text) return "";
-  return text
-    .replace(/[^\x00-\x7F]/g, "") // Remove non-ASCII characters
-    .replace(/[""]/g, '"') // Replace smart quotes
-    .replace(/['']/g, "'") // Replace smart apostrophes
-    .trim();
-}
-
-// Helper method to clean filename
-cleanFilename(text) {
-  if (!text) return "location";
-  return text
-    .replace(/[^\w\s-]/g, "") // Remove special characters except word chars, spaces, hyphens
-    .replace(/\s+/g, "_") // Replace spaces with underscores
-    .toLowerCase();
-}
 
   // Helper method to get top recommendations
   getTopRecommendations(count = 5) {
@@ -1869,3 +2076,11 @@ let travelPlanner;
 document.addEventListener("DOMContentLoaded", () => {
   travelPlanner = new TravelPlanner();
 });
+
+
+
+
+
+
+
+
