@@ -654,3 +654,8 @@ body {
   border-left: 4px solid #28a745;
   margin: 10px 0;
 }
+.stop-marker {
+  font-size: 24px;
+  line-height: 24px;
+  text-align: center;
+}
