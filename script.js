@@ -1310,30 +1310,30 @@ class TravelPlanner {
     }
   }
 
-  exportAsJSON() {
-    const itineraryData = {
-      tripDetails: {
-        source: this.sourceLocation,
-        destination: this.destinationLocation,
-        distance: document.getElementById("distance").textContent,
-        duration: document.getElementById("duration").textContent,
-      },
-      recommendations: this.recommendations,
-      exportDate: new Date().toISOString(),
-    };
+  // exportAsJSON() {
+  //   const itineraryData = {
+  //     tripDetails: {
+  //       source: this.sourceLocation,
+  //       destination: this.destinationLocation,
+  //       distance: document.getElementById("distance").textContent,
+  //       duration: document.getElementById("duration").textContent,
+  //     },
+  //     recommendations: this.recommendations,
+  //     exportDate: new Date().toISOString(),
+  //   };
 
-    const dataStr = JSON.stringify(itineraryData, null, 2);
-    const dataBlob = new Blob([dataStr], { type: "application/json" });
-    const url = URL.createObjectURL(dataBlob);
+  //   const dataStr = JSON.stringify(itineraryData, null, 2);
+  //   const dataBlob = new Blob([dataStr], { type: "application/json" });
+  //   const url = URL.createObjectURL(dataBlob);
 
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "travel-itinerary.json";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  }
+  //   const link = document.createElement("a");
+  //   link.href = url;
+  //   link.download = "travel-itinerary.json";
+  //   document.body.appendChild(link);
+  //   link.click();
+  //   document.body.removeChild(link);
+  //   URL.revokeObjectURL(url);
+  // }
 
   bindEvents() {
     document
@@ -1354,9 +1354,9 @@ class TravelPlanner {
     document
       .getElementById("exportPDF")
       .addEventListener("click", () => this.exportAsPDF());
-    document
-      .getElementById("exportJSON")
-      .addEventListener("click", () => this.exportAsJSON());
+    // document
+    //   .getElementById("exportJSON")
+    //   .addEventListener("click", () => this.exportAsJSON());
     document
       .getElementById("setDuration")
       .addEventListener("click", () => this.setTripDuration());
