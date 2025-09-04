@@ -215,9 +215,9 @@ class TravelPlanner {
         alert(`No results for "${trimmed}". Try a more specific place name.`);
       }
     } catch (err) {
-      alert(
-        "Could not reach the geocoding service. Check your connection and try again."
-      );
+      // alert(
+      //   "Could not reach the geocoding service. Check your connection and try again."
+      // );
     }
   }
 
@@ -350,12 +350,12 @@ class TravelPlanner {
     });
 
     // Handle routing errors
-    this.routeLayer.on("routingerror", (e) => {
-      console.error("Routing error:", e);
-      alert(
-        "Could not find a route between the selected points. Please try different locations."
-      );
-    });
+    // this.routeLayer.on("routingerror", (e) => {
+    //   console.error("Routing error:", e);
+    //   alert(
+    //     "Could not find a route between the selected points. Please try different locations."
+    //   );
+    // });
   }
 
   async getRecommendations() {
@@ -823,9 +823,9 @@ class TravelPlanner {
 
     this.routeLayer.on("routingerror", (e) => {
       console.error("Routing error:", e);
-      alert(
-        "Could not find a route between the selected points. Please try different locations."
-      );
+      // alert(
+      //   "Could not find a route between the selected points. Please try different locations."
+      // );
     });
   }
 
@@ -1127,7 +1127,7 @@ class TravelPlanner {
       }
     } catch (error) {
       console.error("Geocoding favorite failed:", error);
-      alert("Failed to geocode the favorite location. Please try again.");
+      // alert("Failed to geocode the favorite location. Please try again.");
     }
   }
 
