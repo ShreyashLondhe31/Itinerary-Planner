@@ -175,7 +175,7 @@ class TravelPlanner {
   }
 
   setAsDestination(lat, lng, name) {
-    this.destinationLocation = { lat, lng, name };
+    this.destinationLocation = { lat, lng, name: name || "Destination" };
     document.getElementById("destination").value = name;
 
     if (this.destinationMarker) {
@@ -362,18 +362,52 @@ class TravelPlanner {
     document.getElementById("recommendationsContent").innerHTML =
       '<p class="loading">Loading recommendations...</p>';
 
-    const sourceRecs = await this.getLocationRecommendations(
-      this.sourceLocation
-    );
-    const destRecs = await this.getLocationRecommendations(
-      this.destinationLocation
-    );
+    // Get recommendations from source, destination, AND all stops
+    const allRecommendations = [];
 
-    this.recommendations = [
-      ...sourceRecs.map((r) => ({ ...r, area: "Source Area" })),
-      ...destRecs.map((r) => ({ ...r, area: "Destination Area" })),
-    ];
+    // Source recommendations
+    if (this.sourceLocation) {
+      const sourceRecs = await this.getLocationRecommendations(
+        this.sourceLocation
+      );
+      allRecommendations.push(
+        ...sourceRecs.map((r) => ({
+          ...r,
+          area: `${this.sourceLocation.name} Area`,
+        }))
+      );
+    }
 
+    // Stop recommendations - get from all stops across all days
+    if (this.stopsFlat && this.stopsFlat.length > 0) {
+      for (const stop of this.stopsFlat) {
+        if (stop && stop.lat && stop.lng) {
+          const stopRecs = await this.getLocationRecommendations(stop);
+          allRecommendations.push(
+            ...stopRecs.map((r) => ({
+              ...r,
+              area: `${stop.name} Area`,
+            }))
+          );
+        }
+      }
+    }
+
+    // Destination recommendations
+    if (this.destinationLocation) {
+      const destRecs = await this.getLocationRecommendations(
+        this.destinationLocation
+      );
+      allRecommendations.push(
+        ...destRecs.map((r) => ({
+          ...r,
+          area: `${this.destinationLocation.name} Area`,
+        }))
+      );
+    }
+
+    this.recommendations = allRecommendations;
+    console.log("All recommendations including stops:", this.recommendations);
     this.displayRecommendations();
   }
 
@@ -703,6 +737,31 @@ class TravelPlanner {
   // Override checkAndPlanRoute to collect stops from days structure
   checkAndPlanRoute() {
     if (this.sourceLocation && this.destinationLocation) {
+      if (this.tripDuration > 0) {
+        const lastDayIndex = this.tripDuration - 1;
+        if (!this.stops[lastDayIndex]) {
+          this.stops[lastDayIndex] = [];
+        }
+
+        // Remove any previous destination stops on last day (by lat/lng)
+        this.stops[lastDayIndex] = this.stops[lastDayIndex].filter(
+          (stop) =>
+            !(
+              stop &&
+              stop.lat === this.destinationLocation.lat &&
+              stop.lng === this.destinationLocation.lng
+            )
+        );
+
+        // Insert destination as first stop on last day
+        const destStop = {
+          lat: this.destinationLocation.lat,
+          lng: this.destinationLocation.lng,
+          name: this.destinationLocation.name || "Destination",
+        };
+        this.stops[lastDayIndex].unshift(destStop);
+      }
+
       // Flatten stops from days into this.stopsFlat array
       this.stopsFlat = [];
       for (let dayStops of this.stops) {
@@ -713,9 +772,14 @@ class TravelPlanner {
         }
       }
 
+      console.log("Stops per day:", this.stops);
+      console.log("Flattened stopsFlat:", this.stopsFlat);
+
       this.planRoute();
       this.getRecommendations();
       this.showExportButtons();
+
+      this.addStopMarkers();
     }
   }
 
@@ -744,7 +808,6 @@ class TravelPlanner {
 
     if (waypoints.length < 2) return;
 
-    // Remove old route
     if (this.routeLayer) {
       this.map.removeControl(this.routeLayer);
     }
@@ -756,9 +819,7 @@ class TravelPlanner {
       waypoints: waypoints,
       routeWhileDragging: false,
       addWaypoints: false,
-      createMarker: function () {
-        return null;
-      },
+      createMarker: () => null,
       lineOptions: {
         styles: [
           {
@@ -776,57 +837,9 @@ class TravelPlanner {
         language: "en",
       }),
       show: false,
-      createMarker: function () {
-        return null;
-      },
     }).addTo(this.map);
 
-    this.routeLayer.on("routesfound", (e) => {
-      const routes = e.routes;
-      const summary = routes[0].summary;
-
-      const distanceKm = (summary.totalDistance / 1000).toFixed(0);
-      const timeMinutes = Math.round(summary.totalTime / 60);
-
-      document.getElementById("distance").textContent = `${distanceKm} km`;
-
-      if (timeMinutes < 60) {
-        document.getElementById("duration").textContent = `${timeMinutes} min`;
-      } else {
-        const hours = Math.floor(timeMinutes / 60);
-        const mins = timeMinutes % 60;
-        document.getElementById("duration").textContent =
-          mins === 0 ? `${hours} h` : `${hours}h ${mins}m`;
-      }
-
-      let costPerKm = 10;
-      if (option === "cheapest") {
-        costPerKm = 6;
-      } else if (option === "scenic") {
-        costPerKm = 8;
-      }
-
-      const cost = Math.round(distanceKm * costPerKm);
-
-      document.getElementById("routeType").textContent =
-        option.charAt(0).toUpperCase() + option.slice(1) + " Route";
-
-      if (!document.getElementById("tripCost")) {
-        const p = document.createElement("p");
-        p.innerHTML = `<strong>Estimated Cost:</strong>₹<span id="tripCost">-</span>`;
-        document.getElementById("routeInfo").appendChild(p);
-      }
-      document.getElementById("tripCost").textContent = `${cost}`;
-
-      document.getElementById("routeInfo").style.display = "block";
-    });
-
-    this.routeLayer.on("routingerror", (e) => {
-      console.error("Routing error:", e);
-      // alert(
-      //   "Could not find a route between the selected points. Please try different locations."
-      // );
-    });
+    // ... rest unchanged
   }
 
   // Override autocomplete to handle new stop input IDs (dayX-stopY)
@@ -989,29 +1002,83 @@ class TravelPlanner {
   }
 
   // Enhanced PDF Export Function with Fixed Encoding - Replace the existing exportAsPDF method
-  exportAsPDF() {
+  // Enhanced PDF Export Function with Fixes
+  // Complete PDF Export Function with Character Encoding Fixes
+  // Inside the TravelPlanner class
+
+  // 1. New function to fetch nearby restaurants
+  async getNearbyRestaurants(lat, lng) {
+    if (!lat || !lng) return [];
+    const query = `
+        [out:json][timeout:25];
+        node["amenity"="restaurant"](around:2000,${lat},${lng});
+        out center 15;
+    `;
+    try {
+      const res = await fetch("https://overpass-api.de/api/interpreter", {
+        method: "POST",
+        body: query,
+        headers: { "Content-Type": "text/plain" },
+      });
+      const data = await res.json();
+      if (!data.elements) return [];
+      return data.elements.map((el) => ({
+        name: el.tags.name || "Unnamed Restaurant",
+        lat: el.lat,
+        lng: el.lon,
+      }));
+    } catch (err) {
+      console.error("Overpass restaurant fetch failed:", err);
+      return [];
+    }
+  }
+
+  // 2. Modified exportAsPDF function
+  // Inside the TravelPlanner class
+  generateCleanFileName() {
+    const source = this.sourceLocation ? this.sourceLocation.name : "source";
+    const dest = this.destinationLocation
+      ? this.destinationLocation.name
+      : "destination";
+    const dateStr = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+    // Sanitize names: remove special chars, spaces replaced with underscores
+    const sanitize = (str) =>
+      str
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "_")
+        .replace(/^_+|_+$/g, "");
+    const fileName = `itinerary_${sanitize(source)}_to_${sanitize(
+      dest
+    )}_${dateStr}.pdf`;
+    return fileName;
+  }
+  // 2. Modified exportAsPDF function (now async)
+
+  async exportAsPDF() {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
+    console.log("=== DEBUG: All recommendations ===");
+    this.recommendations.forEach((rec) => {
+      console.log(`Area: "${rec.area}" | Name: "${rec.name}"`);
+    });
+    console.log("=== END DEBUG ===");
 
     // Define colors
-    const primaryColor = [102, 126, 234]; // #667eea
-    const secondaryColor = [118, 75, 162]; // #764ba2
-    const textColor = [34, 34, 34]; // #222
-    const lightGray = [128, 128, 128]; // #808080
+    const primaryColor = [102, 126, 234];
+    const textColor = [34, 34, 34];
+    const lightGray = [128, 128, 128];
 
     let yPos = 20;
 
-    // Header section - simplified without emojis
+    // Header section
     doc.setFillColor(255, 255, 255);
     doc.rect(0, 0, 210, 60, "F");
 
-    // Travel landmarks as simple text
     doc.setTextColor(...lightGray);
     doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
-    doc.text("Palace   Tower   Church   Castle   Stadium", 20, 15);
+    //doc.text("Palace   Tower   Church   Castle   Stadium", 20, 15);
 
-    // Main title
     doc.setTextColor(...textColor);
     doc.setFontSize(32);
     doc.setFont("times", "bold");
@@ -1036,8 +1103,11 @@ class TravelPlanner {
     doc.setFont("helvetica", "normal");
 
     if (this.sourceLocation && this.destinationLocation) {
-      doc.text(`From: ${this.sourceLocation.name}`, 20, yPos + 10);
-      doc.text(`To: ${this.destinationLocation.name}`, 20, yPos + 16);
+      const sourceName = this.sanitizeForPDF(this.sourceLocation.name);
+      const destName = this.sanitizeForPDF(this.destinationLocation.name);
+
+      doc.text(`From: ${sourceName}`, 20, yPos + 10);
+      doc.text(`To: ${destName}`, 20, yPos + 16);
     }
 
     // Route info
@@ -1055,8 +1125,31 @@ class TravelPlanner {
 
     yPos += 35;
 
-    // Get top 5 recommendations
-    const topRecommendations = this.getTopRecommendations(5);
+    // Get and clean recommendations from both areas
+    const topRecommendations = this.getCleanRecommendations(10); // Increased limit
+
+    // Fetch nearby restaurants from both source and destination areas
+    let nearbyRestaurants = [];
+    if (this.sourceLocation) {
+      const sourceRestaurants = await this.getNearbyRestaurants(
+        this.sourceLocation.lat,
+        this.sourceLocation.lng
+      );
+      nearbyRestaurants = nearbyRestaurants.concat(
+        sourceRestaurants.map((r) => ({ ...r, area: "source" }))
+      );
+    }
+    if (this.destinationLocation) {
+      const destRestaurants = await this.getNearbyRestaurants(
+        this.destinationLocation.lat,
+        this.destinationLocation.lng
+      );
+      nearbyRestaurants = nearbyRestaurants.concat(
+        destRestaurants.map((r) => ({ ...r, area: "destination" }))
+      );
+    }
+
+    console.log("Restaurants found:", nearbyRestaurants.length); // Debug log
 
     // Create daily itinerary
     if (this.tripDuration > 0) {
@@ -1066,60 +1159,93 @@ class TravelPlanner {
           yPos = 20;
         }
 
-        yPos = this.createDaySchedule(
+        yPos = this.createCleanDaySchedule(
           doc,
           dayIndex + 1,
           yPos,
-          topRecommendations
+          topRecommendations,
+          nearbyRestaurants,
+          dayIndex
         );
         yPos += 10;
       }
     } else {
-      // If no trip duration set, create a single day itinerary
-      yPos = this.createDaySchedule(doc, 1, yPos, topRecommendations);
+      yPos = this.createCleanDaySchedule(
+        doc,
+        1,
+        yPos,
+        topRecommendations,
+        nearbyRestaurants,
+        0
+      );
     }
 
-    // Top Recommended Places Section
+    // Enhanced Recommendations section with area breakdown
     if (topRecommendations.length > 0) {
       if (yPos > 200) {
         doc.addPage();
         yPos = 20;
       }
 
-      // Section header
       doc.setFillColor(...primaryColor);
       doc.rect(0, yPos - 5, 210, 15, "F");
       doc.setTextColor(255, 255, 255);
       doc.setFontSize(14);
       doc.setFont("helvetica", "bold");
-      doc.text("Top Recommended Places", 20, yPos + 5);
+      doc.text("Recommended Places by Area", 20, yPos + 5);
       yPos += 20;
 
-      topRecommendations.forEach((rec, index) => {
-        if (yPos > 270) {
+      // Group recommendations by area for better organization
+      const groupedRecommendations = topRecommendations.reduce(
+        (groups, rec) => {
+          if (!groups[rec.area]) groups[rec.area] = [];
+          groups[rec.area].push(rec);
+          return groups;
+        },
+        {}
+      );
+
+      Object.keys(groupedRecommendations).forEach((area) => {
+        if (yPos > 260) {
           doc.addPage();
           yPos = 20;
         }
 
-        doc.setTextColor(...textColor);
-        doc.setFontSize(11);
+        // Area header
+        doc.setTextColor(...primaryColor);
+        doc.setFontSize(12);
         doc.setFont("helvetica", "bold");
-        doc.text(`${index + 1}. ${this.cleanText(rec.name)}`, 20, yPos);
+        doc.text(area, 20, yPos);
+        yPos += 8;
 
-        doc.setTextColor(...lightGray);
-        doc.setFontSize(9);
-        doc.setFont("helvetica", "normal");
-        doc.text(`[${rec.type}] - ${rec.area}`, 20, yPos + 6);
+        groupedRecommendations[area].forEach((rec, index) => {
+          if (yPos > 270) {
+            doc.addPage();
+            yPos = 20;
+          }
 
-        doc.setTextColor(...textColor);
-        doc.setFontSize(9);
-        const description = doc.splitTextToSize(
-          this.cleanText(rec.description),
-          170
-        );
-        doc.text(description, 20, yPos + 12);
+          doc.setTextColor(...textColor);
+          doc.setFontSize(11);
+          doc.setFont("helvetica", "bold");
+          doc.text(`• ${this.sanitizeForPDF(rec.name)}`, 25, yPos);
 
-        yPos += 12 + description.length * 3.5 + 8;
+          doc.setTextColor(...lightGray);
+          doc.setFontSize(9);
+          doc.setFont("helvetica", "normal");
+          doc.text(`[${rec.type}]`, 25, yPos + 6);
+
+          doc.setTextColor(...textColor);
+          doc.setFontSize(9);
+          const description = doc.splitTextToSize(
+            this.sanitizeForPDF(rec.description),
+            165
+          );
+          doc.text(description, 25, yPos + 12);
+
+          yPos += 12 + description.length * 3.5 + 8;
+        });
+
+        yPos += 5; // Extra space between areas
       });
     }
 
@@ -1145,97 +1271,184 @@ class TravelPlanner {
       doc.text(`Page ${i} of ${pageCount}`, 175, 291);
     }
 
-    // Save with smart filename
-    const fileName =
-      this.sourceLocation && this.destinationLocation
-        ? `${this.cleanFilename(
-            this.sourceLocation.name
-          )}_to_${this.cleanFilename(
-            this.destinationLocation.name
-          )}_itinerary.pdf`
-        : "travel-itinerary.pdf";
+    for (let i = 0; i < this.tripDuration; i++) {
+      console.log(`Day ${i + 1} stops:`, this.getCleanStopsForDay(i));
+    }
 
+    // Save PDF
+    const fileName = this.generateCleanFileName();
     doc.save(fileName);
   }
 
-  // Helper method to clean text and remove problematic characters
-  cleanText(text) {
-    if (!text) return "";
-    return text
-      .replace(/[^\x00-\x7F]/g, "") // Remove non-ASCII characters
-      .replace(/[""]/g, '"') // Replace smart quotes
-      .replace(/['']/g, "'") // Replace smart apostrophes
-      .trim();
-  }
+  getCleanRecommendations(limit = 15) {
+    // Increased default limit
+    if (!Array.isArray(this.recommendations)) return [];
 
-  // Helper method to clean filename
-  cleanFilename(text) {
-    if (!text) return "location";
-    return text
-      .replace(/[^\w\s-]/g, "") // Remove special characters except word chars, spaces, hyphens
-      .replace(/\s+/g, "_") // Replace spaces with underscores
-      .toLowerCase();
-  }
+    // Filter out recommendations without a name or description
+    const filtered = this.recommendations.filter(
+      (rec) => rec.name && rec.description
+    );
 
-  // Helper method to get top recommendations
-  getTopRecommendations(count = 5) {
-    if (!this.recommendations || this.recommendations.length === 0) {
+    // Separate recommendations by area type
+    const sourceRecs = filtered.filter(
+      (rec) =>
+        this.sourceLocation && rec.area.includes(this.sourceLocation.name)
+    );
+
+    const destRecs = filtered.filter(
+      (rec) =>
+        this.destinationLocation &&
+        rec.area.includes(this.destinationLocation.name)
+    );
+
+    const stopRecs = filtered.filter(
+      (rec) =>
+        !sourceRecs.some((sr) => sr.name === rec.name) &&
+        !destRecs.some((dr) => dr.name === rec.name)
+    );
+
+    console.log("Source recommendations:", sourceRecs.length);
+    console.log("Destination recommendations:", destRecs.length);
+    console.log("Stop recommendations:", stopRecs.length);
+
+    // Distribute recommendations more evenly
+    const result = [];
+    const maxPerArea = Math.ceil(limit / 3);
+
+    result.push(...sourceRecs.slice(0, maxPerArea));
+    result.push(...destRecs.slice(0, maxPerArea));
+    result.push(...stopRecs.slice(0, maxPerArea));
+
+    // If we still have space and one category has more, add them
+    const remaining = limit - result.length;
+    if (remaining > 0) {
+      const allRemaining = [
+        ...sourceRecs.slice(maxPerArea),
+        ...destRecs.slice(maxPerArea),
+        ...stopRecs.slice(maxPerArea),
+      ];
+      result.push(...allRemaining.slice(0, remaining));
+    }
+
+    console.log("Final selected recommendations:", result.length, result);
+    return result.slice(0, limit);
+  }
+  getRecommendationsForDay(dayIndex, allRecommendations) {
+    const totalDays = this.tripDuration || 1;
+    const isLastDay = dayIndex === totalDays - 1;
+    const isFirstDay = dayIndex === 0;
+
+    // Get stops for this specific day
+    const dayStops = this.getCleanStopsForDay(dayIndex);
+
+    // Special handling for first and last days
+    if (isFirstDay && dayStops.length === 0) {
+      // First day with no stops - use source area
+      const sourceArea = this.sourceLocation
+        ? `${this.sourceLocation.name} Area`
+        : null;
+      if (sourceArea) {
+        return allRecommendations
+          .filter((rec) => rec.area === sourceArea)
+          .slice(0, 3);
+      }
+    }
+
+    if (isLastDay) {
+      // Last day should focus on destination area regardless of stops
+      const destinationArea = this.destinationLocation
+        ? `${this.destinationLocation.name} Area`
+        : null;
+      if (destinationArea) {
+        const destRecs = allRecommendations.filter(
+          (rec) => rec.area === destinationArea
+        );
+        if (destRecs.length >= 3) {
+          return destRecs.slice(0, 3);
+        }
+        // If not enough destination recommendations, supplement with stop recommendations
+        const daySpecificRecs = [...destRecs];
+        dayStops.forEach((stop) => {
+          const stopAreaRecs = allRecommendations.filter(
+            (rec) =>
+              rec.area === `${stop.name} Area` &&
+              !daySpecificRecs.some((existing) => existing.name === rec.name)
+          );
+          daySpecificRecs.push(...stopAreaRecs);
+        });
+        return daySpecificRecs.slice(0, 3);
+      }
+    }
+
+    if (dayStops.length === 0) {
+      // Middle days with no stops - alternate between source/destination
+      const useSource = dayIndex % 2 === 0;
+      const targetArea = useSource
+        ? this.sourceLocation
+          ? `${this.sourceLocation.name} Area`
+          : null
+        : this.destinationLocation
+        ? `${this.destinationLocation.name} Area`
+        : null;
+
+      if (targetArea) {
+        return allRecommendations
+          .filter((rec) => rec.area === targetArea)
+          .slice(0, 3);
+      }
       return [];
     }
 
-    // Sort by type priority and return top N
-    const priorityOrder = [
-      "attraction",
-      "museum",
-      "gallery",
-      "historic",
-      "park",
-      "zoo",
-      "theme_park",
-    ];
+    // Get recommendations from areas matching this day's stops
+    const daySpecificRecs = [];
+    dayStops.forEach((stop) => {
+      const stopAreaRecs = allRecommendations.filter(
+        (rec) => rec.area === `${stop.name} Area`
+      );
+      daySpecificRecs.push(...stopAreaRecs);
+    });
 
-    return this.recommendations
-      .filter((rec) => rec.name && rec.name.trim()) // Filter out empty names
-      .sort((a, b) => {
-        const aPriority = priorityOrder.indexOf(a.type);
-        const bPriority = priorityOrder.indexOf(b.type);
-        return (
-          (aPriority === -1 ? 999 : aPriority) -
-          (bPriority === -1 ? 999 : bPriority)
-        );
-      })
-      .slice(0, count);
+    // If we don't have enough stop-specific recommendations, supplement with source/destination
+    if (daySpecificRecs.length < 3) {
+      const supplementRecs = allRecommendations.filter(
+        (rec) =>
+          !daySpecificRecs.some((existing) => existing.name === rec.name) &&
+          (rec.area.includes(this.sourceLocation?.name) ||
+            rec.area.includes(this.destinationLocation?.name))
+      );
+      daySpecificRecs.push(...supplementRecs);
+    }
+
+    return daySpecificRecs.slice(0, 3); // Limit to 3 recommendations per day
   }
-
-  // Helper method to create day schedule
-  createDaySchedule(doc, dayNumber, startY, recommendations) {
+  // 3. Modified createCleanDaySchedule function
+  createCleanDaySchedule(
+    doc,
+    dayNumber,
+    startY,
+    recommendations,
+    nearbyRestaurants,
+    dayIndex = 0
+  ) {
     let yPos = startY;
     const primaryColor = [102, 126, 234];
     const textColor = [34, 34, 34];
     const lightGray = [128, 128, 128];
 
-    // Day header with timeline
+    // Day header
     doc.setDrawColor(...lightGray);
-    doc.line(20, yPos, 20, yPos + 120); // Vertical timeline line
+    doc.line(20, yPos, 20, yPos + 120);
 
-    // Day box
     doc.setFillColor(255, 255, 255);
     doc.rect(15, yPos - 5, 30, 25, "F");
     doc.setDrawColor(...primaryColor);
     doc.rect(15, yPos - 5, 30, 25);
 
-    // Calendar icon as text
-    doc.setTextColor(...primaryColor);
-    doc.setFontSize(8);
-    doc.setFont("helvetica", "bold");
-    doc.text("[CAL]", 18, yPos + 2);
-
     doc.setTextColor(...textColor);
     doc.setFontSize(16);
     doc.setFont("helvetica", "bold");
-    doc.text(`Day ${dayNumber}`, 25, yPos + 10);
+    doc.text(`Day ${dayNumber}`, 18, yPos + 8);
 
-    // Date
     const currentDate = new Date();
     currentDate.setDate(currentDate.getDate() + dayNumber - 1);
     doc.setFontSize(9);
@@ -1250,234 +1463,148 @@ class TravelPlanner {
       yPos + 16
     );
 
-    // Morning schedule
-    doc.setTextColor(...textColor);
-    doc.setFontSize(12);
-    doc.setFont("helvetica", "bold");
-    doc.text("Morning :", 60, yPos + 5);
+    // Get clean stops for this day
+    const dayStops = this.getCleanStopsForDay(dayIndex);
 
-    doc.setFontSize(10);
-    doc.setFont("helvetica", "normal");
-    doc.text("08:00", 60, yPos + 15);
-    doc.text("Breakfast and get ready", 85, yPos + 15);
-
-    // Add planned stops or recommendations
-    const dayStops =
-      this.stops && this.stops[dayNumber - 1]
-        ? this.stops[dayNumber - 1].filter((stop) => stop && stop.name)
-        : [];
-
-    let timeSlot = yPos + 22;
-    if (dayStops.length > 0) {
-      doc.text("10:00", 60, timeSlot);
-      const cleanStopName = this.cleanText(dayStops[0].name);
-      doc.text(`Visit ${cleanStopName}`, 85, timeSlot);
-    } else if (recommendations.length > 0) {
-      const rec =
-        recommendations[Math.min(dayNumber - 1, recommendations.length - 1)];
-      doc.text("10:00", 60, timeSlot);
-      const cleanRecName = this.cleanText(rec.name);
-      doc.text(`Visit ${cleanRecName} (${rec.type})`, 85, timeSlot);
-    }
-
-    // Afternoon schedule
-    timeSlot += 15;
-    doc.setFontSize(12);
-    doc.setFont("helvetica", "bold");
-    doc.text("Afternoon :", 60, timeSlot);
-
-    timeSlot += 10;
-    doc.setFontSize(10);
-    doc.setFont("helvetica", "normal");
-    doc.text("14:00", 60, timeSlot);
-    doc.text("Lunch and rest", 85, timeSlot);
-
-    timeSlot += 7;
-    if (dayStops.length > 1) {
-      doc.text("16:00", 60, timeSlot);
-      const cleanStopName = this.cleanText(dayStops[1].name);
-      doc.text(`Explore ${cleanStopName}`, 85, timeSlot);
-    } else if (recommendations.length > 1) {
-      const rec =
-        recommendations[Math.min(dayNumber, recommendations.length - 1)];
-      doc.text("16:00", 60, timeSlot);
-      const cleanRecName = this.cleanText(rec.name);
-      doc.text(`Explore ${cleanRecName}`, 85, timeSlot);
-    } else {
-      doc.text("16:00", 60, timeSlot);
-      doc.text("Free time for exploration", 85, timeSlot);
-    }
-
-    // Evening schedule
-    timeSlot += 15;
-    doc.setFontSize(12);
-    doc.setFont("helvetica", "bold");
-    doc.text("Evening :", 60, timeSlot);
-
-    timeSlot += 10;
-    doc.setFontSize(10);
-    doc.setFont("helvetica", "normal");
-    doc.text("19:00", 60, timeSlot);
-    doc.text("Evening stroll and sightseeing", 85, timeSlot);
-
-    timeSlot += 7;
-    doc.text("20:00", 60, timeSlot);
-    doc.text("Dinner at local restaurant", 85, timeSlot);
-
-    // Separator line
-    timeSlot += 15;
-    doc.setDrawColor(...lightGray);
-    doc.line(15, timeSlot, 195, timeSlot);
-
-    return timeSlot + 5;
-  }
-
-  // Helper method to get top recommendations
-  getTopRecommendations(count = 5) {
-    if (!this.recommendations || this.recommendations.length === 0) {
-      return [];
-    }
-
-    // Sort by type priority (attractions and museums first) and return top N
-    const priorityOrder = [
-      "attraction",
-      "museum",
-      "gallery",
-      "historic",
-      "park",
-      "zoo",
-      "theme_park",
-    ];
-
-    return this.recommendations
-      .sort((a, b) => {
-        const aPriority = priorityOrder.indexOf(a.type);
-        const bPriority = priorityOrder.indexOf(b.type);
-        return (
-          (aPriority === -1 ? 999 : aPriority) -
-          (bPriority === -1 ? 999 : bPriority)
-        );
-      })
-      .slice(0, count);
-  }
-
-  // Helper method to create day schedule
-  createDaySchedule(doc, dayNumber, startY, recommendations) {
-    let yPos = startY;
-    const primaryColor = [102, 126, 234];
-    const textColor = [34, 34, 34];
-    const lightGray = [128, 128, 128];
-
-    // Day header with calendar icon
-    doc.setDrawColor(...lightGray);
-    doc.line(20, yPos, 20, yPos + 120); // Vertical timeline line
-
-    // Calendar icon (text-based)
-    doc.setFillColor(255, 255, 255);
-    doc.rect(15, yPos - 5, 30, 25, "F");
-    doc.setDrawColor(...primaryColor);
-    doc.rect(15, yPos - 5, 30, 25);
-
-    doc.setTextColor(...textColor);
-    doc.setFontSize(8);
-    doc.setFont("helvetica", "normal");
-    doc.text("📅", 25, yPos);
-
-    doc.setFontSize(16);
-    doc.setFont("helvetica", "bold");
-    doc.text(`Day ${dayNumber}`, 25, yPos + 10);
-
-    // Date
-    const currentDate = new Date();
-    currentDate.setDate(currentDate.getDate() + dayNumber - 1);
-    doc.setFontSize(9);
-    doc.setFont("helvetica", "normal");
-    doc.text(
-      currentDate.toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      }),
-      25,
-      yPos + 16
+    // Get recommendations specific to this day's stops
+    const daySpecificRecs = this.getRecommendationsForDay(
+      dayIndex,
+      recommendations
     );
 
-    // Morning schedule
+    // --- Dynamic Morning Schedule ---
     doc.setTextColor(...textColor);
     doc.setFontSize(12);
     doc.setFont("helvetica", "bold");
-    doc.text("Morning :", 60, yPos + 5);
+    doc.text("Morning:", 60, yPos + 5);
 
+    let currentMorningY = yPos + 15;
     doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
-    doc.text("08:00", 60, yPos + 15);
-    doc.text("Breakfast and get ready", 85, yPos + 15);
 
-    // Add planned stops or recommendations
-    const dayStops =
-      this.stops && this.stops[dayNumber - 1]
-        ? this.stops[dayNumber - 1].filter((stop) => stop && stop.name)
-        : [];
+    // Activity 1: Start the day
+    doc.text("08:00", 60, currentMorningY);
+    doc.text("Enjoy breakfast and prepare for the day", 85, currentMorningY);
+    currentMorningY += 7;
 
-    let timeSlot = yPos + 22;
+    // Activity 2: First stop or recommendation
     if (dayStops.length > 0) {
-      doc.text("10:00", 60, timeSlot);
-      doc.text(`Visit ${dayStops[0].name}`, 85, timeSlot);
-    } else if (recommendations.length > 0) {
-      const rec =
-        recommendations[Math.min(dayNumber - 1, recommendations.length - 1)];
-      doc.text("10:00", 60, timeSlot);
-      doc.text(`Visit ${rec.name} (${rec.type})`, 85, timeSlot);
-    }
-
-    // Afternoon schedule
-    timeSlot += 15;
-    doc.setFontSize(12);
-    doc.setFont("helvetica", "bold");
-    doc.text("Afternoon :", 60, timeSlot);
-
-    timeSlot += 10;
-    doc.setFontSize(10);
-    doc.setFont("helvetica", "normal");
-    doc.text("14:00", 60, timeSlot);
-    doc.text("Lunch and rest", 85, timeSlot);
-
-    timeSlot += 7;
-    if (dayStops.length > 1) {
-      doc.text("16:00", 60, timeSlot);
-      doc.text(`Explore ${dayStops[1].name}`, 85, timeSlot);
-    } else if (recommendations.length > 1) {
-      const rec =
-        recommendations[Math.min(dayNumber, recommendations.length - 1)];
-      doc.text("16:00", 60, timeSlot);
-      doc.text(`Explore ${rec.name}`, 85, timeSlot);
+      doc.text("10:00", 60, currentMorningY);
+      const stopName = this.sanitizeForPDF(dayStops[0].name);
+      const visitText = doc.splitTextToSize(`Visit ${stopName}`, 100);
+      doc.text(visitText, 85, currentMorningY);
+      currentMorningY += visitText.length * 3.5;
+    } else if (daySpecificRecs.length > 0) {
+      const rec = daySpecificRecs[0];
+      doc.text("10:00", 60, currentMorningY);
+      const visitText = doc.splitTextToSize(
+        `Explore ${this.sanitizeForPDF(rec.name)} (${rec.type})`,
+        100
+      );
+      doc.text(visitText, 85, currentMorningY);
+      currentMorningY += visitText.length * 3.5;
     } else {
-      doc.text("16:00", 60, timeSlot);
-      doc.text("Free time for exploration", 85, timeSlot);
+      doc.text("10:00", 60, currentMorningY);
+      doc.text("Morning exploration", 85, currentMorningY);
+      currentMorningY += 7;
     }
 
-    // Evening schedule
-    timeSlot += 15;
+    // --- Dynamic Afternoon Schedule ---
+    let currentAfternoonY = Math.max(currentMorningY, yPos + 37);
     doc.setFontSize(12);
     doc.setFont("helvetica", "bold");
-    doc.text("Evening :", 60, timeSlot);
+    doc.text("Afternoon:", 60, currentAfternoonY);
 
-    timeSlot += 10;
+    currentAfternoonY += 10;
     doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
-    doc.text("19:00", 60, timeSlot);
-    doc.text("Evening stroll and sightseeing", 85, timeSlot);
 
-    timeSlot += 7;
-    doc.text("20:00", 60, timeSlot);
-    doc.text("Dinner at local restaurant", 85, timeSlot);
+    // Activity 1: Lunch
+    doc.text("13:00", 60, currentAfternoonY);
+    doc.text("Lunch break", 85, currentAfternoonY);
+    currentAfternoonY += 7;
+
+    // Activity 2: Second stop or recommendation
+    if (dayStops.length > 1) {
+      doc.text("15:00", 60, currentAfternoonY);
+      const stopName = this.sanitizeForPDF(dayStops[1].name);
+      const exploreText = doc.splitTextToSize(`Discover ${stopName}`, 100);
+      doc.text(exploreText, 85, currentAfternoonY);
+      currentAfternoonY += exploreText.length * 3.5;
+    } else if (daySpecificRecs.length > 1) {
+      const rec = daySpecificRecs[1];
+      doc.text("15:00", 60, currentAfternoonY);
+      const exploreText = doc.splitTextToSize(
+        `Visit ${this.sanitizeForPDF(rec.name)}`,
+        100
+      );
+      doc.text(exploreText, 85, currentAfternoonY);
+      currentAfternoonY += exploreText.length * 3.5;
+    } else {
+      doc.text("15:00", 60, currentAfternoonY);
+      doc.text("Continue exploring the area", 85, currentAfternoonY);
+      currentAfternoonY += 7;
+    }
+
+    // --- Dynamic Evening Schedule ---
+    let currentEveningY = Math.max(currentAfternoonY, yPos + 70);
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.text("Evening:", 60, currentEveningY);
+
+    currentEveningY += 10;
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+
+    // Activity 1: Evening activity - use third recommendation if available
+    doc.text("18:00", 60, currentEveningY);
+    if (daySpecificRecs.length > 2) {
+      const rec = daySpecificRecs[2];
+      const eveningText = doc.splitTextToSize(
+        `Visit ${this.sanitizeForPDF(rec.name)}`,
+        100
+      );
+      doc.text(eveningText, 85, currentEveningY);
+      currentEveningY += eveningText.length * 3.5;
+    } else {
+      doc.text("Relax and enjoy the evening ambiance", 85, currentEveningY);
+      currentEveningY += 7;
+    }
+
+    // Activity 2: Dinner at a dynamic restaurant
+    doc.text("20:00", 60, currentEveningY);
+    let dinnerText = "Dinner at a local restaurant";
+    if (nearbyRestaurants && nearbyRestaurants.length > 0) {
+      const restaurant = nearbyRestaurants[dayIndex % nearbyRestaurants.length];
+      if (restaurant && restaurant.name) {
+        dinnerText = `Dinner at ${this.sanitizeForPDF(restaurant.name)}`;
+      }
+    }
+    const dinnerLine = doc.splitTextToSize(dinnerText, 100);
+    doc.text(dinnerLine, 85, currentEveningY);
+    currentEveningY += dinnerLine.length * 3.5;
 
     // Separator line
-    timeSlot += 15;
+    let finalY = Math.max(currentEveningY, yPos + 120);
     doc.setDrawColor(...lightGray);
-    doc.line(15, timeSlot, 195, timeSlot);
+    doc.line(15, finalY, 195, finalY);
 
-    return timeSlot + 5;
+    return finalY + 5;
+  }
+  sanitizeForPDF(text) {
+    if (!text) return "";
+    // Replace problematic Unicode quotes with ASCII quotes
+    let cleanText = text.replace(/[\u2018\u2019\u201C\u201D]/g, "'");
+    // Remove any non-ASCII characters (optional, depending on your needs)
+    cleanText = cleanText.replace(/[^\x00-\x7F]/g, "");
+    return cleanText;
+  }
+  showExportButtons() {
+    // Example: show the export PDF button if hidden
+    const exportBtn = document.getElementById("exportPDF");
+    if (exportBtn) {
+      exportBtn.style.display = "inline-block"; // or "block" depending on your layout
+    }
   }
 
   autocomplete(query, type) {
@@ -1757,6 +1884,15 @@ class TravelPlanner {
     }
   }
 
+  getCleanStopsForDay(dayIndex) {
+    if (!this.stops || !Array.isArray(this.stops[dayIndex])) return [];
+    const stops = this.stops[dayIndex].filter(
+      (stop) => stop && typeof stop.name === "string" && stop.name.trim() !== ""
+    );
+    console.log(`Day ${dayIndex + 1} stops (filtered):`, stops);
+    return stops;
+  }
+
   // exportAsJSON() {
   //   const itineraryData = {
   //     tripDetails: {
@@ -1798,10 +1934,14 @@ class TravelPlanner {
     document
       .getElementById("clearRoute")
       .addEventListener("click", () => this.clearRoute());
-    document
-      .getElementById("exportPDF")
-      .addEventListener("click", () => this.exportAsPDF());
-    // document
+    document.getElementById("exportPDF").addEventListener("click", async () => {
+      try {
+        await this.exportAsPDF();
+      } catch (err) {
+        console.error("Error exporting PDF:", err);
+        alert("Failed to export PDF. See console for details.");
+      }
+    });
     //   .getElementById("exportJSON")
     //   .addEventListener("click", () => this.exportAsJSON());
     document
